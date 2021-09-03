@@ -6,7 +6,7 @@ This is a basic voronoi shader! I followed a tutorial and played with adding new
 
 // Function takes vec2 input and outputs random vec2 between 0 and 1.
 vec2 giveRandomVec2(vec2 p) {
-    // We take output and 
+    // We take input (p) and return a normalised vector
     vec3 o = fract(p.xyx * vec3(123.34, 234.34, 345.56));
     o += dot(o, o+34.45);
     return fract(vec2(o.x*o.y, o.y*o.z));
