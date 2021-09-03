@@ -1,5 +1,8 @@
 /*
+Van Andrew Nguyen
 
+This is my first shader! I played around with creating a sphere by using the distance from the centre of the UV coords to adjust lightness.
+Then, I played with shadows in using uv.x in relation to some parameteres to emulate a light being cast.
 */
 
 void mainImage( out vec4 fragColor, in vec2 fragCoord )
