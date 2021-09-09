@@ -54,6 +54,8 @@ vec4 hexagonCoord(vec2 uv) {
 void mainImage( out vec4 fragColor, in vec2 fragCoord )
 {
     // Grab UV Coord and centre
+    //vec2 uv = fragCoord.xy / iResolution.xy;
+    //uv.x *= iResolution.x / iResolution.y;
     vec2 uv = (fragCoord - 0.5 * iResolution.xy) / iResolution.y;
     uv *= ZOOM + 1.0 * sin(iTime * TIMEMULT * 0.5);
     
@@ -63,16 +65,13 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
     // Visualise
     vec3 col = vec3(0.0);
     vec4 hex = hexagonCoord(uv);
-    // Change the lower and upper bound of smooth step using sine wave
     float lowerbound = 0.2 + 0.1 * sin(iTime * TIMEMULT);
     float upperbound = 0.8 + 0.1 * cos(iTime * TIMEMULT);
     float stepper = hex.y * sin(hex.z * hex.w + iTime * TIMEMULT);
     float c = smoothstep(lowerbound, upperbound, stepper); // z and w = 3rd, 4th arguments
-    
-    // Add to the output colour
     col += c;
     col = mix(col, vec3(0.6, 0.6, 0.2), stepper);
-    col = mix(col, vec3(0.2, 0.015, 0.01), 1.0 - stepper);
+    col = mix(col, vec3(0.1, 0.01, 0.005), 1.0 - stepper);
     
     /* Infinite Tiling
     float size=  0.2;
