@@ -1,6 +1,7 @@
 /*
 Van Andrew Nguyen
 04/09/21
+[Polar Flower]
 
 This was made following a tutorial for using polar coordinates in shadertoy. 
 Creates a flower which spins and edges which twirl.

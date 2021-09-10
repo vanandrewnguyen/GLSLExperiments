@@ -1,6 +1,7 @@
 /*
 Van Andrew Nguyen
 09/09/21
+[Velvet]
 
 I followed a tutorial from "The Art of Code" in exploring the means to tile not squares, but hexagons.
 The resultant effect resembles a glowing beehive. 

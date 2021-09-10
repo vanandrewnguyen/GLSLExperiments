@@ -1,6 +1,7 @@
 /*
 Van Andrew Nguyen
 08/09/21
+[Petri Dish]
 
 Visualisation of metaballs in glsl. We split the canvas up and get neighbouring cells.
 Then we can grab distance and create an offset. Then after I had the base effect, 

@@ -1,6 +1,7 @@
 /*
 Van Andrew Nguyen
 06/09/21
+[Value Noise]
 
 This time round I wanted to explore generating and understanding noise functions. Followed this amazing tutorial:
 https://youtu.be/zXsWftRdsvU

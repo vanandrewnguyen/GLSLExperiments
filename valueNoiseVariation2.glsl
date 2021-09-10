@@ -1,6 +1,7 @@
 /*
 Van Andrew Nguyen
-06/09/21
+07/09/21
+[Bubble]
 
 Variation two of the noise function. This time I wanted to overlay it on some kind of shape.
 The shape is drawn from this resource: https://thebookofshaders.com/11/

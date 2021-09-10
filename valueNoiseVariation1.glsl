@@ -1,6 +1,7 @@
 /*
 Van Andrew Nguyen
 06/09/21
+[Magma]
 
 Variation one of the basic value noise script. I add and subtract different noise textures of varying thresholds (in smoothstep)
 to create a bubbly texture (cutout holes and such, etc). It's also animated.

@@ -1,6 +1,7 @@
 /*
 Van Andrew Nguyen
 01/09/21
+[Fake Sphere Lighting]
 
 This is my first shader! I played around with creating a sphere by using the distance from the centre of the UV coords to adjust lightness.
 Then, I played with shadows in using uv.x in relation to some parameteres to emulate a light being cast.

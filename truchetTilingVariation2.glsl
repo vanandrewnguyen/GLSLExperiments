@@ -1,6 +1,7 @@
 /*
 Van Andrew Nguyen
 10/09/21
+[Snake Den]
 
 This follows on further experimentataion with truchet tiling. I applied a circular smoothstep by comparing the length of the uv coord
 to a constant variable as a radius. This gave a circular motion. I blended the colour to black to smooth out the edges of the tiling.

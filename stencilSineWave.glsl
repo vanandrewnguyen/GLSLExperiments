@@ -1,6 +1,7 @@
 /*
 Van Andrew Nguyen
 06/09/21
+[Stencil Sine]
 
 This was my first 'shader' using GLSL without tutorial help! Really proud of how this turned out.
 We generate a sine wave using y values. Of course, we can use superposition to impose more sine waves on top; they all add up anyways.

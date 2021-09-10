@@ -1,6 +1,7 @@
 /*
 Van Andrew Nguyen 
 10/09/21
+[Chessboard]
 
 Following square tiling and hexagonal tiling, I followed a tutorial from "The Art of Code" to truchet tiling.
 The idea behind it was to lay a grid full of a simple pattern, then arbitrarily flip some tiles to get a 'maze-like' look. 

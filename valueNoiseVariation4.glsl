@@ -1,6 +1,7 @@
 /*
 Van Andrew Nguyen
 08/09/21
+[Marble]
 
 I added some parameters to the value noise, and changed the colour.
 Added smoothstep to colour variable to cutoff a certain threshold. Resultant effect looks much like marble more than oil.

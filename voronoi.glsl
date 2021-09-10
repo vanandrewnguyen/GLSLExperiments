@@ -1,6 +1,7 @@
 /*
 Van Andrew Nguyen
 03/09/21
+[Voronoi]
 
 This is a basic voronoi shader! I followed a tutorial and played with adding new paramters. 
 */

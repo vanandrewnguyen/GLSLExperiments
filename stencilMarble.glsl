@@ -1,6 +1,7 @@
 /*
 van Andrew Nguyen
 08/09/21
+[Stencil Marble]
 
 I tried playing with creating temp variables for x and y, and using those as parameters. 
 Here I was able to get a repeating wave shape, which I morphed into a circle. From there, I wanted to fade out the edges.

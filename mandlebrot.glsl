@@ -1,6 +1,7 @@
 /*
 Van Andrew Nguyen
 05/09/21
+[Mandlebrot]
 
 Have been reading up on the fractals and recursive drawing. Found this amazing resource:
 https://darkeclipz.github.io/fractals/
