@@ -1,3 +1,12 @@
+/*
+Van Andrew Nguyen
+20/09/21
+[Raymarched Mountain Terrain]
+
+Super fun to follow "The Art of Code's" raymarching beginner tutorial. I implemented sphere lighting and immediately had to 
+try adding it to this mountain terrain. The result is really nice! Paired with static lighting (dependant on depth),
+the moving dynamic light source functions as it should. Really happy.
+*/
 
 // Global Constants
 #define ZOOM 2.0
