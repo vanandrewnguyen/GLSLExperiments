@@ -1,4 +1,9 @@
 # glsl_experiments
 I am learning how to write shaders, these are my different attempts to learn them!
+These scripts are directly exported from shadertoy.
 
-Here is a short compilation of some of them; https://youtu.be/Lu57SY6eVrQ
+Latest Compilation:
+https://youtu.be/w6ojPoc0h5M
+
+First Iteration:
+https://youtu.be/Lu57SY6eVrQ
