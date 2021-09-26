@@ -7,7 +7,6 @@ Followed a tutorial on light refraction for a cube. Uses a 3D texture and redire
 so light doesn't pass directly through, giving it a nice look. The index of refraction can be changed with IOR.
 */
 
-
 // Globals //////////////////////////////////////////////////////////////////////
 
 /*
@@ -76,9 +75,10 @@ mat2 rotate(float a) {
 float getDist(vec3 pos) {
     
     // Get dist of the various shapes
-    vec3 cubePos = pos - vec3(0, 0.5, 5);
+    vec3 cubePos = pos - vec3(0, 0.8, 5);
     cubePos.xz *= rotate(iTime * 0.5);
-    float cubeDis = sdCube(cubePos, vec3(0.5)); 
+    cubePos.yz *= rotate(iTime * 0.5);
+    float cubeDis = sdCube(cubePos, vec3(0.6 + 0.05 * sin(iTime))); 
     
     // Final distance to return
     float finalDis = min(cubeDis, cubeDis);
@@ -122,7 +122,7 @@ float rayMarch(vec3 rayOrigin, vec3 rayDir) {
 float getLight(vec3 pos, vec3 lightOrigin) {
     // Get the light origin
     vec3 lightPos = lightOrigin; // basically a point in 3D space
-    //lightPos.xz += vec2(sin(iTime), cos(iTime)) * 4.0;
+    //lightPos.xz += vec2(sin(iTime * 8.0), cos(iTime * 8.0)) * 4.0;
     
     // Get the light ray
     vec3 light = normalize(lightPos - pos);
@@ -169,11 +169,12 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
     float dis = rayMarch(rayOrigin, rayDir); // ray outside object
     if (dis < MAXDIS) {
         vec3 pos = rayOrigin + rayDir * dis;
-        float diffuseLight = getLight(pos, vec3(-2, 5, 6));
+        float diffuseLight = getLight(pos, vec3(-2, 5, 4));
         vec3 normal = getNormal(pos);
+        vec3 mixCol = mix(shadowCol, lightCol, diffuseLight);
         
         // Reflections
-        float IOR = 1.2;
+        float IOR = 1.1;
         /*
         Index of refraction
         Vacuum  -> 1.00
@@ -185,11 +186,20 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
         vec3 reflectedRay = reflect(rayDir, normal);
         vec3 refractedRay = refract(rayDir, normal, 1.0 / IOR); // last arg is INDEX of REFRACTION
         float disInterior = rayMarch(pos, refractedRay); // we have to account for the refracted INSIDE the object
-        vec3 reflectedTex = texture(iChannel0, refractedRay).rgb;
+        
+        // Chromatic Abberation
+        float abberation = 0.01;
+        vec3 reflectedTex = vec3(0.0); // texture(iChannel0, refractedRay).rgb;
+        refractedRay = refract(rayDir, normal, 1.0 / (IOR - abberation));
+        reflectedTex.r = texture(iChannel0, refractedRay).r;
+        refractedRay = refract(rayDir, normal, 1.0 / IOR);
+        reflectedTex.g = texture(iChannel0, refractedRay).g;
+        refractedRay = refract(rayDir, normal, 1.0 / (IOR + abberation));
+        reflectedTex.b = texture(iChannel0, refractedRay).b;
         
         // Gradual lighting curve
-        vec3 mixCol = mix(shadowCol, lightCol, diffuseLight);
-        col = vec3(reflectedTex);
+        
+        col = vec3(reflectedTex) + mixCol * 0.25;
     }
     
     // Output to screen
