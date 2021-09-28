@@ -1,13 +1,14 @@
-/*
-Van Andrew Nguyen
 27/09/21
 [Gyroid Sphere]
 
 I experimented with a boolean intersection of a sphere and a gyroid. I added displacement on the sphere surface using 
 sine waves and finally got around to properly addressing the issue of lighting an object using it's height as well as the light source.
 So now the object evidently has shadows around the low points, and highlights on its raised surface as to be expected in real life.
-Paired with the diffuse light; it looks way more realistic. '
+Paired with the diffuse light; it looks way more realistic. 
 The resultant effect is this gross, bubbly raymarched sphere.
+
+Update: I am able to use the light refraction code from another tutorial, so the resultant material looks like a very strange
+glass ball, with a lot of bumps.
 */
 
 // Globals //////////////////////////////////////////////////////////////////////
@@ -21,6 +22,7 @@ Surf distance is the distance we loop to get to register a hit on the surface
 #define MAXDIS 100.0
 #define SURFDIS 0.01
 
+#define PI 3.1415
 
 // SDFS //////////////////////////////////////////////////////////////////////
 
@@ -189,6 +191,9 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
     vec3 rayOrigin = vec3(0, camHeight, 0); 
     vec3 rayDir = normalize(vec3(uv.x, uv.y + downTilt, 1));
     
+    // Assign background
+    col = texture(iChannel0, rayDir + vec3(0, 0, 0)).rgb;
+    
     // Visualise ray marched items
     float dis = rayMarch(rayOrigin, rayDir);
     if (dis < MAXDIS) {
@@ -205,7 +210,26 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
         float dif = clamp(dot(normal, height), 0.0, 1.0);
         mixCol = mix(vec3(0.0), vec3(1.0), dif) * difCol;
         
-        col = vec3(mixCol);
+        // col = vec3(mixCol);
+        
+        // Reflections
+        float IOR = 1.45;
+        vec3 reflectedRay = reflect(rayDir, normal);
+        vec3 refractedRay = refract(rayDir, normal, 1.0 / IOR); 
+        float disInterior = rayMarch(pos, refractedRay);
+        
+        // Chromatic Abberation
+        float abberation = 0.02;
+        vec3 reflectedTex = vec3(0.0); // texture(iChannel0, refractedRay).rgb;
+        refractedRay = refract(rayDir, normal, 1.0 / (IOR - abberation));
+        reflectedTex.r = texture(iChannel0, refractedRay).r;
+        refractedRay = refract(rayDir, normal, 1.0 / IOR);
+        reflectedTex.g = texture(iChannel0, refractedRay).g;
+        refractedRay = refract(rayDir, normal, 1.0 / (IOR + abberation));
+        reflectedTex.b = texture(iChannel0, refractedRay).b;
+        
+        float materialOpaqueness = 0.4;
+        col = vec3(reflectedTex) + mixCol * materialOpaqueness;
     }
     
     // Output to screen
