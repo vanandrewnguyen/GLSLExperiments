@@ -13,3 +13,5 @@ https://youtu.be/w6ojPoc0h5M
 
 First Iteration 📼:
 https://youtu.be/Lu57SY6eVrQ
+
+I am absolutely certain that my first couple (tens if not hundreds) of shaders will be horribly written - however I am uploading them all here anyways. Might be nice to look back and get a laugh. Once my journey is complete I will create a folder containing my 'highlights'; the cleanest and most efficient scripts of the bunch.
