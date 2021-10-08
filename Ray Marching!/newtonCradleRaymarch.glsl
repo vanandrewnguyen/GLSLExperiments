@@ -18,6 +18,7 @@ Surf distance is the distance we loop to get to register a hit on the surface
 #define MAXSTEPS 100
 #define MAXDIS 100.0
 #define SURFDIS 0.01
+#define MAXBOUNCES 2
 
 #define MATBASE   1
 #define MATBAR    2
@@ -167,6 +168,9 @@ vec2 getDist(vec3 pos) {
                               vec2Min(ballThreeDis, 
                               vec2Min(ballFourDis, ballFiveDis))));
     
+    // Surface Imperfections
+    cubeDis += sin(pos.x * 8.0) * 0.002; 
+    
     // Final distance to return
     float finalDis = cubeDis;
     finalDis = opUnion(finalDis, barDis);
@@ -250,7 +254,11 @@ float getLight(vec3 pos, vec3 lightOrigin) {
 
 // Main //////////////////////////////////////////////////////////////////////
 
-vec3 renderObject(vec3 rayOrigin, vec3 rayDir) {
+/*
+Little note; you can set variables as 'inout' so if you change it within the function,
+it changes outside of the function as well like a normal pointer.
+*/
+vec3 renderObject(inout vec3 rayOrigin, inout vec3 rayDir, inout vec3 refVal, bool last) {
     // Init Colours
     vec3 col = texture(iChannel0, rayDir).rgb;
     vec3 shadowCol = vec3(0.2, 0.1, 0.15);
@@ -259,6 +267,9 @@ vec3 renderObject(vec3 rayOrigin, vec3 rayDir) {
     // Visualise the object
     vec2 grabbedDist = rayMarch(rayOrigin, rayDir);
     float dis = grabbedDist.x;
+    
+    refVal = vec3(0.0); // reset reflection before render
+    
     if (dis < MAXDIS) {
         vec3 pos = rayOrigin + rayDir * dis;
         vec3 normal = getNormal(pos);
@@ -267,22 +278,36 @@ vec3 renderObject(vec3 rayOrigin, vec3 rayDir) {
         // Reflection
         vec3 reflectedRay = reflect(rayDir, normal);
         vec3 refTex = texture(iChannel0, reflectedRay).rgb;
+        float fresnel = 1.0 - dot(normal, -rayDir); // calculate how many rays are hitting (depending on angle of camera)
+        fresnel = clamp(fresnel, 0.0, 1.0);
+        fresnel = pow(fresnel, 4.0);
         
         // Gradual lighting curve
         vec3 mixCol = mix(shadowCol, lightCol, diffuseLight);
         
         // Materials
         int mat = int(grabbedDist.y);
-        float newLight = (0.75 + diffuseLight * 0.25);
+        float brighterLight = (0.4 + 0.6 * diffuseLight);
         if (mat == MATBASE) {
-            mixCol = (0.4 + 0.6 * refTex) * vec3(0.313, 0.105, 0.145) * diffuseLight;
+            mixCol = vec3(0.313, 0.105, 0.145) * diffuseLight; 
+            refVal = vec3(mix(0.01, 0.5, fresnel)); //fresnel;
         } else if (mat == MATBAR) {
-            mixCol = (0.2 + 0.8 * refTex) * vec3(0.968, 0.945, 0.929) * newLight;
+            mixCol = (0.5 + 0.5 * refTex) * vec3(0.992, 0.890, 0.866) * brighterLight; 
+            refVal = vec3(0.8);
         } else if (mat == MATBALL) {
-            mixCol = refTex * vec3(0.992, 0.890, 0.866) * newLight;
+            mixCol = refTex * vec3(0.992, 0.890, 0.866) * brighterLight;
+            refVal = vec3(0.8);
+            if (last) {
+                col += refVal * refTex;
+            }
         } else if (mat == MATSTRING) {
             mixCol = vec3(0.968, 0.945, 0.929) * diffuseLight;
+            refVal = vec3(0.0);
         }
+        
+        // Ray march again to get reflections of other sdfs
+        rayOrigin = pos + normal * SURFDIS * 3.0;
+        rayDir = reflectedRay;
         
         col = vec3(mixCol);
     }
@@ -297,16 +322,24 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
 
     // Declare Col
     vec3 col = vec3(0.0);
+    vec3 bounce = vec3(0.0);
 
     // Setup Camera
     float camHeight = 2.4;
-    float downTilt = -0.25;
-    float camZoom = 1.0;  //2.0 + sin(iTime);
+    float downTilt = -0.3;
+    float camZoom = 1.2;  //2.0 + sin(iTime);
     vec3 rayOrigin = vec3(0, camHeight, 0); // this is the camera (origin of vector)
     vec3 rayDir = normalize(vec3(uv.x, uv.y + downTilt, camZoom));
     
     // Render image
-    col = renderObject(rayOrigin, rayDir);
+    vec3 refVal = vec3(0.0); //reflectivity
+    vec3 refFilter = vec3(1.0); 
+    col = renderObject(rayOrigin, rayDir, refVal, false);
+    for (int i=0;i<MAXBOUNCES;i++) {
+        refFilter *= refVal;
+        bounce = refFilter * renderObject(rayOrigin, rayDir, refVal, i==MAXBOUNCES-1);
+        col += bounce * refVal;
+    }
     
     // Output to screen
     fragColor = vec4(col,1.0);
