@@ -6,6 +6,8 @@ Van Andrew Nguyen
 I followed the Art of Code's tutorial to create a newton's cradle model. Currently it just uses reflections from the cube map.
 This is going to change; I am attempting to add reflections between the objects themselves through ray marching.
 Furthermore, I can experiment with surface imperfects by dulling and etching on the surfaces of the sdfs.
+
+Update: I have added reflections.
 */
 
 // Globals //////////////////////////////////////////////////////////////////////
@@ -18,7 +20,7 @@ Surf distance is the distance we loop to get to register a hit on the surface
 #define MAXSTEPS 100
 #define MAXDIS 100.0
 #define SURFDIS 0.01
-#define MAXBOUNCES 2
+#define MAXBOUNCES 1
 
 #define MATBASE   1
 #define MATBAR    2
@@ -118,7 +120,6 @@ vec2 sdNewtonBall(vec3 pos, vec3 origin, float rad, float angle) {
     float torusDis = sdTorus(newPosElevated, vec2(0.05), 0.04);
     newPosElevated.z = abs(newPosElevated.z);
     float lineDis = sdCapsule(newPosElevated, vec3(0), vec3(0, ropeHeight, ropeWidth), 0.002);
-    
     
     // Return value
     float val = opSmoothUnion(sphereDis, torusDis, 0.025);
@@ -286,6 +287,7 @@ vec3 renderObject(inout vec3 rayOrigin, inout vec3 rayDir, inout vec3 refVal, bo
         vec3 mixCol = mix(shadowCol, lightCol, diffuseLight);
         
         // Materials
+        // Here we change the colour and reflectivity of each material index
         int mat = int(grabbedDist.y);
         float brighterLight = (0.4 + 0.6 * diffuseLight);
         if (mat == MATBASE) {
@@ -305,7 +307,7 @@ vec3 renderObject(inout vec3 rayOrigin, inout vec3 rayDir, inout vec3 refVal, bo
             refVal = vec3(0.0);
         }
         
-        // Ray march again to get reflections of other sdfs
+        // Ray march again to get reflections of other sdfs (called in 'bounce')
         rayOrigin = pos + normal * SURFDIS * 3.0;
         rayDir = reflectedRay;
         
@@ -326,15 +328,17 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
 
     // Setup Camera
     float camHeight = 2.4;
-    float downTilt = -0.3;
-    float camZoom = 1.2;  //2.0 + sin(iTime);
-    vec3 rayOrigin = vec3(0, camHeight, 0); // this is the camera (origin of vector)
+    float t = 0.5 + 0.5 * sin(iTime);
+    float downTilt = mix(-0.5, -0.3, t); //-0.5; //-0.3;
+    float camZoom = mix(2.4, 1.2, t);    //2.4; //1.2;  //2.0 + sin(iTime);
+    vec3 rayOrigin = vec3(0, camHeight, 0); 
     vec3 rayDir = normalize(vec3(uv.x, uv.y + downTilt, camZoom));
     
     // Render image
     vec3 refVal = vec3(0.0); //reflectivity
     vec3 refFilter = vec3(1.0); 
     col = renderObject(rayOrigin, rayDir, refVal, false);
+    // Loop for as many reflection bounces as we need 
     for (int i=0;i<MAXBOUNCES;i++) {
         refFilter *= refVal;
         bounce = refFilter * renderObject(rayOrigin, rayDir, refVal, i==MAXBOUNCES-1);
