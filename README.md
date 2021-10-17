@@ -8,6 +8,9 @@ I've learnt techniques most notably of generating noise, drawing simple shapes a
 Here is the page I am using to act as my visual portfolio 💻:
 https://vanandrew.itch.io/shadertoy-experiments
 
+Process Video:
+https://www.youtube.com/watch?v=-75mqHBU7tw
+
 Latest Compilation 📹:
 https://youtu.be/w6ojPoc0h5M
 
