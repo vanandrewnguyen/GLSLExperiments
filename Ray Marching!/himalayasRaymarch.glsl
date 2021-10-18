@@ -30,7 +30,7 @@ const vec3 dirtCol = vec3(0.2, 0.188, 0.180);
 const vec3 snowCol = vec3(0.882, 0.921, 0.937);
 const vec3 blueFogCol = vec3(0.729, 0.909, 0.992);
 const vec3 grassCol = vec3(0.223, 0.270, 0.207);
-const vec3 sunRayCol = vec3(0.980, 0.733, 0.580);
+const vec3 sunRayCol = vec3(0.980, 0.633, 0.480);
 
 // Return a randomised float using a vec2 
 float hash21(vec2 uv) {
@@ -218,10 +218,17 @@ float getLight(vec3 pos, vec3 lightOrigin) {
     float dis = rayMarch(pos + normal * SURFDIS * 2.0, light);
     
     // Getting shadows (if disToSphere < disToLight then we have a shadow)
+    /*
     if (dis < length(lightPos - pos)) {
         float shadowIntensity = 0.3;
         dif *= shadowIntensity;
     }
+    */
+    float shadowIntensity = 0.5;
+    float shadowBlur = 0.4;
+    float stepper = clamp(dis / length(lightPos - pos), 0.0, 1.0);
+    dif *= smoothstep(shadowIntensity - shadowBlur, shadowIntensity, stepper);
+    dif *= 0.6;
     
     return dif;
 }
@@ -230,9 +237,10 @@ float getLight(vec3 pos, vec3 lightOrigin) {
 vec3 background(vec3 rayDir) {
     vec3 col = vec3(0.0);
     
-    vec3 specCol = blueFogCol;
     float y = rayDir.y * 0.5 + 0.5; // light is top, dark is bottom. 
-    col += y * specCol;
+    col += y * blueFogCol;
+    float x = rayDir.x * 0.5 + 0.5;
+    col += x * sunRayCol * 0.6;
     
     return col;
 }
@@ -264,7 +272,7 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
         float diffuseLight = getLight(pos, keyLightPos); 
         
         // Set base dirt colour
-        vec3 mixCol = dirtCol * mix(shadowCol, lightCol, diffuseLight);;
+        vec3 mixCol = dirtCol * mix(shadowCol, lightCol, diffuseLight);
         
         // Colour based on steepness
         vec3 localUpDir = normalize(pos);
@@ -292,4 +300,4 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
     
     // Output to screen
     fragColor = vec4(col,1.0);
-}W
+}
