@@ -29,9 +29,10 @@ Surf distance is the distance we loop to get to register a hit on the surface
 const vec3 shadowCol = vec3(0.2, 0.1, 0.15);
 const vec3 lightCol = vec3(0.8, 0.75, 0.7);
 const vec3 dirtCol = vec3(0.117, 0.117, 0.101);
-const vec3 grassCol = vec3(0.223, 0.270, 0.207);
+const vec3 dirtCol2 = vec3(0.192, 0.152, 0.129);
+const vec3 grassCol = vec3(0.293, 0.350, 0.257);
 const vec3 snowCol = vec3(0.882, 0.921, 0.937);
-const vec3 waterCol = vec3(0.094, 0.274, 0.329);
+const vec3 waterCol = vec3(0.094, 0.224, 0.279);
 const vec3 blueLightCol = vec3(0.729, 0.909, 0.992);
 const vec3 orangeLightCol = vec3(0.968, 0.596, 0.431);
 
@@ -52,6 +53,17 @@ float hash31(vec3 p) {
 			 dot(p,vec3(113.5,271.9,124.6)));
 
 	return fract(sin(p.x * p.y * p.z)*43758.5453123);
+}
+
+// Credit to ruojake: https://www.shadertoy.com/view/tlKXDz
+float noise(vec3 pos) {
+	vec3 id = floor(pos);
+    vec3 off = smoothstep(0.0, 1.0, pos - id);
+    return mix(
+        mix(mix(hash31(id), hash31(id + vec3(1, 0, 0)), off.x),
+            mix(hash31(id + vec3(0, 0, 1)), hash31(id + vec3(1, 0, 1)), off.x), off.z),
+        mix(mix(hash31(id + vec3(0, 1, 0)), hash31(id + vec3(1, 1, 0)), off.x),
+            mix(hash31(id + vec3(0, 1, 1)), hash31(id + 1.0), off.x), off.z), off.y);
 }
 
 // SDFS //////////////////////////////////////////////////////////////////////
@@ -113,11 +125,20 @@ float sdMountains(vec3 pos) {
 
 float sdWater(vec3 pos) {
     // Generate plane and waves
-    float waterDis = pos.y + 2.1;
-    waterDis += 0.005 * sin(10.0 * pos.x + iTime);
-    waterDis += 0.005 * sin(15.0 * pos.z + iTime);
-    
+    float waterDis = pos.y + 2.25;
+    waterDis += 0.005 * sin(16.0 * pos.x + iTime + (0.5 + 0.5 * sin(iTime)) );
+    waterDis += 0.005 * sin(24.0 * pos.z + iTime * 0.8);
+    waterDis += 0.01 * noise(iTime + pos * 8.0);
     return waterDis;
+}
+
+float sdNoiseTex(vec3 pos) {
+    float density = noise(pos * 4.0) * 2.0;
+    //pos.y -= iTime * 0.2; unless we want motion in the noise texture
+    // we don't want movement (e.g. underwater light refraction)
+    density -= noise(pos * 11.0);
+    
+    return clamp(density * 4.0 * (1.0 - density), 0.0, 1.0);
 }
 
 // Vectors //////////////////////////////////////////////////////////////////////
@@ -240,8 +261,8 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
     float downTilt = -0.25;
     vec3 rayOrigin = vec3(0, camHeight, 0); // this is the camera (origin of vector)
     vec3 rayDir = normalize(vec3(uv.x, uv.y + downTilt, 1));
-    vec3 fillLightPos = vec3(-1, 6, 1);
-    vec3 keyLightPos = vec3(4, 4, 4);
+    vec3 fillLightPos = vec3(-1, 5, 3);
+    vec3 keyLightPos = vec3(3, 4, 3);
     
     float maxLightDis = 8.0; // used to clamp light sources as ratio
     float IOR = 1.33; // water index of refraction
@@ -254,6 +275,7 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
     if (dis < MAXDIS) {
         vec3 pos = rayOrigin + rayDir * dis;
         vec3 normal = getNormal(pos, true);
+        // Lighting values
         float fillDiffuseLight = getLight(pos, fillLightPos, true);
         float keyDiffuseLight = getLight(pos, keyLightPos, true);
         float finalFill = fillDiffuseLight * clamp(1.0 - (length(fillLightPos - pos) / maxLightDis), 0.0, 1.0);
@@ -269,9 +291,14 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
         // Materials
         if (mat == MATMOUNTAIN-1) {
             mixCol = dirtCol;
+            float heightStepper = 1.0 - clamp(pos.y + 2.4, 0.0, 1.0);
+            // Dirt colouring variation (using noise)
+            float noiseTex = sdNoiseTex(transformPos(pos));
+            vec3 noiseMix = mix(mixCol, dirtCol2, smoothstep(0.2, 0.0, noiseTex));
+            mixCol = mix(mixCol, noiseMix, heightStepper);
             // Grass (we clamp it to the bottom half of the mountains)
-            vec3 grassMix = mix(mixCol, grassCol, smoothstep(0.6, 0.4, steepness));
-            mixCol = mix(mixCol, grassMix, 1.0 - clamp(pos.y + 2.4, 0.0, 1.0)); 
+            vec3 grassMix = mix(mixCol, grassCol, smoothstep(0.8, 0.5, steepness));
+            mixCol = mix(mixCol, grassMix, heightStepper); 
             // Snow
             vec3 snowMix = mix(mixCol, snowCol, smoothstep(0.7, 0.6, steepness));
             mixCol = mix(mixCol, snowMix, clamp(pos.y + 1.6, 0.0, 1.0)); 
@@ -280,21 +307,34 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
             vec3 rayDirIn = refract(rayDir, normal, 1.0 / IOR);
             vec3 posEnter = pos - normal * SURFDIS * 3.0;
             float disIn = rayMarch(posEnter, rayDirIn, false).x;
-            float stepper = length(disIn);
-            mixCol = mix(dirtCol, waterCol, stepper);
+            float heightStepper = length(disIn);
+            mixCol = mix(dirtCol, waterCol, heightStepper);
             
             // Reflections
             vec3 reflectRayDir = reflect(rayDir, normal);
             float reflectDis = rayMarch(posEnter, reflectRayDir, false).x;
             if (reflectDis < MAXDIS) {
+                // Faked, since we don't really need to raymarch again to get the colour
                 mixCol = mix(mixCol, mix(dirtCol, snowCol, length(reflectDis) * 0.5), 0.02 * length(reflectDis));
             }
+            
+            // Specular (take angle diff between rayDir and reflect)
+            float specStrength = 0.1;
+            vec3 tempLightOrigin = keyLightPos; // move spec light away since it's too strong
+            tempLightOrigin.y += -32.0;
+            tempLightOrigin.z += 8.0;
+            vec3 lightReflectRayDir = reflect(tempLightOrigin - posEnter, normal);
+            float spec = pow(max(dot(rayDir, lightReflectRayDir), 0.0), 1.0);
+            vec3 specularCol = specStrength * spec * blueLightCol;
+            mixCol += specularCol * heightStepper;
         }
         
         // Lighting
         mixCol *= fillDiffuseLight;
         mixCol += blueLightCol * finalFill;
-        mixCol += orangeLightCol * finalKey;
+        if (mat != MATWATER) {
+            mixCol += orangeLightCol * finalKey;
+        }
         
         col = vec3(mixCol);
     }
