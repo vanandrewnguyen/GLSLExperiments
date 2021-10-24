@@ -1,6 +1,6 @@
 /*
 Van Andrew Nguyen
-13/09/2021
+24/10/2021
 [Wax Bust]
 
 Source for this shader: https://www.alanzucconi.com/2017/08/30/fast-subsurface-scattering-1/
