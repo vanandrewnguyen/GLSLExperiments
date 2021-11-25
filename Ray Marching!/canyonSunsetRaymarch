@@ -1,0 +1,503 @@
+/*
+Van Andrew Nguyen
+25/11/21
+[Rock Canyon at Sunset]
+
+I wanted to try something chill as I've been out of shader work for a couple weeks (exams and all). This shader uses perlin noise that's cutoff smoothly to generate the 
+rocky canyon structures. Textures are used to distort the rock formations for a natural, rough surface. The colouring was the best part, I played with calculating steepness and
+viewing angle to see which parts of the rock I could colour. Since the reference image I used showed rocks with sediment layers, I mimicked that by using the rock height.
+Water reflections now reflect a pre-rendered sky, rather than a flat colour which is nice.
+*/
+
+// Globals //////////////////////////////////////////////////////////////////////
+
+/*
+Max steps is the maximum amount of steps we can make to get a ray length
+Max distance is the maximum distance we can shoot a ray
+Surf distance is the distance we loop to get to register a hit on the surface
+*/
+#define MAXSTEPS 100
+#define MAXDIS 20.0
+#define SURFDIS 0.01
+
+#define MATNULL 0
+#define MATWATER 1
+#define MATROCK 2
+#define WATERHEIGHT 0.28
+
+const vec3 shadowCol = vec3(0.2, 0.1, 0.15);
+const vec3 lightCol = vec3(0.8, 0.75, 0.7);
+const vec3 fogCol = vec3(0.615, 0.533, 0.666);
+const vec3 blueSkyCol = vec3(0.698, 0.921, 0.960);
+const vec3 purpleSkyCol = vec3(0.709, 0.403, 0.737);
+const vec3 sunrayCol = vec3(0.937, 0.376, 0.101); 
+const vec3 fillLightCol = vec3(0.854, 0.364, 0.501);
+const vec3 keyLightCol = vec3(0.937, 0.376, 0.101);
+
+const vec3 baseCloudCol = vec3(0.937, 0.376, 0.101); 
+const vec3 lightCloudCol = vec3(0.968, 0.894, 0.929);
+const vec3 baseRockCol = vec3(0.635, 0.301, 0.164);
+const vec3 lightRockCol = vec3(0.807, 0.650, 0.572);
+const vec3 darkRockCol = vec3(0.298, 0.215, 0.164);
+const vec3 baseWaterCol = vec3(0.098, 0.823, 0.807);
+
+// Noise /////////////////////////////////////////////////////////////////////
+
+// Return a randomised float using a vec2 (uv coord)
+float hash1(float n) {
+    return fract( n*17.0*fract( n*0.3183099 ) );
+}
+
+float hash21(vec2 uv) {
+    return fract(hash1(uv.x * uv.y));
+}
+
+// Return smooth noise 
+float smoothNoise(vec2 uv) {
+    // Create 1D random value
+    vec2 index = uv;
+    vec2 localUV = fract(index); 
+    vec2 cellID = floor(index); 
+    
+    localUV = localUV*localUV*(3.0 - 2.0 * localUV); // Hermite Curve
+    
+    // Get noise values for corners of each cell (bottom/top right + left, then mix it)
+    float bl = hash21(cellID);
+    float br = hash21(cellID + vec2(1, 0));
+    float b = mix(bl, br, localUV.x);
+    float tl = hash21(cellID + vec2(0, 1));
+    float tr = hash21(cellID + vec2(1, 1));
+    float t = mix(tl, tr, localUV.x);
+    float noiseCol = mix(b, t, localUV.y);
+        
+    return noiseCol;
+}
+
+// Smooth out the line using cubic
+float smoothFade(float t) {
+    return t*t*t*(t*(t*6.0 - 15.0) + 10.0);
+}
+
+// Same thing but 2D
+vec2 getGradient(vec2 pos) {
+	float texW = 256.0;
+	vec4 v = texture(iChannel0, vec2(pos.x / texW, pos.y / texW));
+    // Map this to [-1, 1]
+    return normalize(v.xy * 2.0 - vec2(1.0)); 
+}
+
+// Noise function
+float getNoise(vec2 pos) {
+    // n(p) = (1 - F(p-p0))g(p0)(p-p0) + F(p-p0)g(p1)(p-p1)
+    // Source: https://gpfault.net/posts/perlin-noise.txt.html
+    // Get four corners as seperate points
+    vec2 pos0 = floor(pos);
+    vec2 pos1 = pos0 + vec2(1.0, 0.0);
+    vec2 pos2 = pos0 + vec2(0.0, 1.0);
+    vec2 pos3 = pos0 + vec2(1.0, 1.0);
+
+    // Get gradients for the four corners
+    vec2 gradient0 = getGradient(pos0);
+    vec2 gradient1 = getGradient(pos1);
+    vec2 gradient2 = getGradient(pos2);
+    vec2 gradient3 = getGradient(pos3);
+    
+    // Horizontal Blend
+    float hBlend = smoothFade(pos.x - pos0.x); 
+
+    // Vertical Blend
+    float vBlend = smoothFade(pos.y - pos0.y); 
+
+    // Get dot product of top two lattice points, then bottom two points
+    // Then interpolate both of them
+    float p0p1 = (1.0 - hBlend) * dot(gradient0, (pos - pos0)) + 
+                 hBlend * dot(gradient1, (pos - pos1));
+    float p2p3 = (1.0 - hBlend) * dot(gradient2, (pos - pos2)) + 
+                 hBlend * dot(gradient3, (pos - pos3));
+
+    /* Calculate final result */
+    return (1.0 - vBlend) * p0p1 + vBlend * p2p3;
+}
+
+// SDFS //////////////////////////////////////////////////////////////////////
+
+// Shape Operations (From https://www.iquilezles.org/)
+float opUnion(float d1, float d2) { return min(d1,d2); }
+float opSubtraction(float d1, float d2) { return max(-d1,d2); }
+float opIntersection(float d1, float d2) { return max(d1,d2); }
+float opSmoothUnion( float d1, float d2, float k ) {
+    float h = clamp( 0.5 + 0.5*(d2-d1)/k, 0.0, 1.0 );
+    return mix( d2, d1, h ) - k*h*(1.0-h); }
+float opSmoothSubtraction( float d1, float d2, float k ) {
+    float h = clamp( 0.5 - 0.5*(d2+d1)/k, 0.0, 1.0 );
+    return mix( d2, -d1, h ) + k*h*(1.0-h); }
+float opSmoothIntersection( float d1, float d2, float k ) {
+    float h = clamp( 0.5 - 0.5*(d2-d1)/k, 0.0, 1.0 );
+    return mix( d2, d1, h ) + k*h*(1.0-h); }
+
+// Rotation Matrix
+mat2 rotate(float a) {
+    float s = sin(a);
+    float c = cos(a);
+    return mat2(c, -s, s, c);
+}
+
+// Sphere Distance
+float sdSphere(vec3 pos, vec3 center, float rad) {
+    pos -= center;
+    return length(pos) - rad;
+}
+
+// Noise SDF
+float sdNoiseFBM(vec2 pos, int iterations) {
+    float dis = 0.0;
+    float amp = 4.0;
+    float freq = 0.5;
+    vec2 offset = vec2(0.0);
+    
+    // Loop
+    for (int i = 0; i < iterations; i++) {
+        // Use abs() of the noise to get sharp ridges, for water ripples
+        dis += abs(getNoise((pos + offset) * freq) * amp);
+        amp *= 0.5;
+        freq *= 2.0;
+        offset += amp;
+    }
+    
+    return dis;
+}
+
+float sdBaseCanyonDis(vec3 pos, int iterations) {
+    float dis = 0.0;
+    float amp = 0.4;
+    float freq = 0.05;
+    float offset = 4.0;
+    
+    // Loop
+    for (int i = 0; i < iterations; i++) {
+        dis += texture(iChannel2, offset + pos.xz * freq).r * amp;
+        offset *= 2.0;
+        amp *= 0.5;
+        freq *= 2.0;
+    }
+
+    return dis;
+}
+
+float sdWaterDis(vec3 pos, int iterations) {
+    float dis = pos.y + WATERHEIGHT; 
+    float amp = 0.005;
+    float freq = 5.0;
+    float offset = 0.0;
+    
+    //0.005 * sin(pos.x * 10.0 + iTime);
+    for (int i = 0; i < iterations; i++) {
+        dis += amp * sin(pos.x * (freq + offset) + iTime) * sin(pos.z * freq + iTime + offset);
+        amp *= 0.2;
+        freq *= 2.0;
+        offset += 8.0;
+    }
+    
+    return dis;
+}
+
+float sdTopCanyonDis(vec3 pos, int iterations) {
+    float dis = 0.0;
+    float amp = 0.04;
+    float freq = 0.1;
+    float offset = 4.0;
+    
+    // Loop
+    for (int i = 0; i < iterations; i++) {
+        dis += texture(iChannel1, offset + pos.xz * freq).r * amp;
+        offset *= 2.0;
+        amp *= 0.5;
+        freq *= 2.0;
+    }
+
+    return dis;
+}
+
+// Vectors //////////////////////////////////////////////////////////////////////
+
+// Get distance function
+vec2 getDist(vec3 pos, bool includeWater) {
+    
+    // Get SDF dis
+    /*
+    We create a canyon by setting the top and bottom layers as planes.
+    We then distort these planes and provide a transition between them in the form
+    of layered perlin noise.
+    */
+    pos.z += iTime;
+    float basePlane = pos.y - 1.0;
+    float bottomThres = 0.8;
+    float topThres = 1.1;
+    float noiseDis = smoothstep(bottomThres, topThres, sdNoiseFBM(pos.xz * 0.25, 8));
+    basePlane += (1.0 - noiseDis) * sdBaseCanyonDis(pos, 2);
+    basePlane += noiseDis * sdBaseCanyonDis(pos.zyx, 4);
+    float canyonDis = basePlane + noiseDis;
+    
+    float waterHeight = sdWaterDis(pos, 2);
+    float waterDis = (noiseDis > 0.99) ? (waterHeight) : MAXDIS;
+    
+    // Final distance to return
+    float finalDis = opUnion(canyonDis * 0.15, waterDis);
+    
+    // Final material to return
+    int mat = MATNULL;
+    if (finalDis == waterDis && includeWater) {
+        mat = MATWATER;
+    } else if (finalDis == canyonDis * 0.15) {
+        mat = MATROCK;
+    }
+    
+    return vec2(finalDis, mat);
+}
+
+// Return the normal ray
+vec3 getNormal(vec3 pos, bool includeWater) {
+    float dis = getDist(pos, includeWater).x;
+    vec2 val = vec2(0.01, 0.0);
+    
+    // To get the slope we give the curve two values super close together
+    // Instead of deriving we can do this method via swizzling
+    vec3 normal = dis - vec3(getDist(pos-val.xyy, includeWater).x, 
+                             getDist(pos-val.yxy, includeWater).x, 
+                             getDist(pos-val.yyx, includeWater).x);
+    // Same way of doing getDist(p-vec3(0.01, 0.0, 0.0), ... etc
+    return normalize(normal);
+}
+
+// Ray Marching function
+vec2 rayMarch(vec3 rayOrigin, vec3 rayDir, bool includeWater) {
+    float disFromOrigin = 0.0;
+    int mat = 0;
+    
+    // Now we loop for max steps or until the distance is very small
+    for (int i=0;i<MAXSTEPS;i++) {
+        // Declare current marching location
+        vec3 pos = rayOrigin + rayDir * disFromOrigin;
+        vec2 passedDMat = getDist(pos, includeWater);
+        float disToScene = passedDMat.x;
+        mat = int(passedDMat.y);
+        
+        disFromOrigin += disToScene;
+        
+        // Exit condition; we have a hit
+        if (disFromOrigin > MAXDIS || disToScene < SURFDIS) { break; }
+    }
+    
+    return vec2(disFromOrigin, mat);
+}
+
+// Lighting function
+float getLight(vec3 pos, vec3 lightOrigin, bool includeWater) {
+    // Get the light origin
+    vec3 lightPos = lightOrigin; // basically a point in 3D space
+    
+    // Get the light ray
+    vec3 light = normalize(lightPos - pos);
+    
+    // Get normal
+    vec3 normal = getNormal(pos, includeWater);
+    
+    // Get diffused lighting 
+    // We want 0 if the rays are parallel, 1 if the rays are perpendicular
+    // Hence we use dot product
+    float dif = clamp(dot(normal, light), 0.0, 1.0);
+    float dis = rayMarch(pos + normal * SURFDIS * 2.0, light, includeWater).x;
+    
+    // Getting shadows (if disToSphere < disToLight then we have a shadow)
+    if (dis < length(lightPos - pos)) {
+        float shadowIntensity = 0.2;
+        dif *= shadowIntensity;
+    }
+    
+    return dif;
+}
+
+// Main //////////////////////////////////////////////////////////////////////
+
+// Render 2D Clouds
+vec3 renderClouds(vec3 rayDir, vec3 originCol) {
+    vec3 col = vec3(0.0);
+    
+    // Create varying uv coords to print from
+    vec2 uv1 = rayDir.xy;
+    vec2 uv2 = rayDir.xy;
+    vec2 uv3 = rayDir.xy;
+    vec2 uv4 = rayDir.xy;
+    uv1.x += iTime / 10.0;
+    uv2.x += iTime / 15.0;
+    uv3.x -= iTime / 20.0;
+    uv4.x += iTime / 25.0;
+    
+    // FBM but manual
+    col += vec3(smoothNoise(uv1 * 4.0)) * 1.0;
+    col += vec3(smoothNoise(uv1 * 8.0)) * 0.5;
+    col += vec3(smoothNoise(uv2 * 16.0)) * 0.25;
+    col += vec3(smoothNoise(uv3 * 32.0)) * 0.125;
+    col += vec3(smoothNoise(uv4 * 64.0)) * 0.0625;
+    col /= 1.8;
+    
+    // Get rid of the darker areas
+    col *= smoothstep(-0.1, 1.4, col);
+    
+    vec3 newSkyCol = mix(mix(baseCloudCol, lightCloudCol, col * 2.0), originCol, 1.0 - col);
+    
+    return newSkyCol;
+}
+
+// Background function to draw gradient
+vec3 background(vec3 rayDir) {
+    vec3 col = vec3(0.0);
+
+    // Gradient Colour 
+    float y = rayDir.y * 0.2 + 1.6; 
+    col += y * purpleSkyCol * 0.7;
+    float y2 = rayDir.y * 0.2 + 1.0;
+    col += y2 * blueSkyCol * 0.2;
+    float x = rayDir.x * 0.6 - 0.1; // intensity-> pos
+    col += x * sunrayCol * 0.5;
+
+    // Mesh with fog at the bottom
+    col = mix(fogCol, col, smoothstep(0.3, 0.7, rayDir.y + 0.5)); 
+
+    return col;
+}
+
+// Fog 
+vec3 drawFog(vec3 rayDir) {
+    vec3 col = vec3(0.0);
+    
+    // Gradient Colour
+    float y = rayDir.y * 0.2 + 0.8;
+    col += y * fogCol;
+
+    return col;
+}
+
+void mainImage( out vec4 fragColor, in vec2 fragCoord )
+{
+    // Grab UV Coord
+    vec2 uv = (fragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;
+
+    // Declare Col
+    vec3 col = vec3(0.0);
+    
+    // Setup Camera
+    float camHeight = 1.8;
+    float downTilt = -0.2;
+    vec3 rayOrigin = vec3(0, camHeight, 0); // this is the camera (origin of vector)
+    vec3 rayDir = normalize(vec3(uv.x, uv.y + downTilt, 1));
+    
+    // Lighting Setup
+    vec3 bgCloudRender = renderClouds(10.0 * (rayDir * 0.5 + 0.5), background(rayDir));
+    vec3 keyLightPos = vec3(5, 2, 6);
+    vec3 fillLightPos = vec3(-2, 8, 2);
+    float lightMaxLen = 10.0;
+    vec3 ambientLight = vec3(0.5);
+    vec3 mixCol = vec3(ambientLight); 
+    float IOR = 1.33;
+    
+    // Visualise 
+    vec2 passedDMat = rayMarch(rayOrigin, rayDir, true);
+    float dis = passedDMat.x;
+    int mat = int(passedDMat.y);
+    if (dis < MAXDIS) {
+        vec3 pos = rayOrigin + rayDir * dis;
+        vec3 normal = getNormal(pos, true);
+        vec3 posEnter = pos - normal * SURFDIS * 3.0;
+        
+        // Lock the lights based on their distance to scene
+        float keyDiffuseLight = getLight(pos, keyLightPos, true);
+        float fillDiffuseLight = getLight(pos, fillLightPos, true);
+        float finalFill = fillDiffuseLight * clamp(1.0 - (length(fillLightPos - pos) / lightMaxLen), 0.0, 1.0);
+        float finalKey = keyDiffuseLight * clamp(1.0 - (length(keyLightPos - pos) / lightMaxLen), 0.0, 1.0);
+        // Materials
+        if (mat == MATWATER) {
+            mixCol *= baseWaterCol;
+            
+            // Depth rendering
+            vec3 rayDirIn = refract(rayDir, normal, 1.0 / IOR);
+            vec2 interiorPassedDMat = rayMarch(posEnter, rayDirIn, false);
+            float disIn = interiorPassedDMat.x;
+            int matIn = int(interiorPassedDMat.y);
+            vec3 posExit = posEnter + rayDirIn * disIn;
+            
+            vec3 interiorCol = ambientLight * baseRockCol;
+            float stepper = length(posExit - posEnter);
+            mixCol *= mix(interiorCol, baseWaterCol, stepper);
+            
+            // Reflections (other materials, mainly just the sky really)
+            float reflectedVal = clamp(0.1 + finalFill + finalKey, 0.0, 1.0);
+            vec3 reflectedRay = reflect(rayDir, normal);
+            vec2 exteriorPassedDMat = rayMarch(posEnter, reflectedRay, false);
+            float disOut = exteriorPassedDMat.x;
+            int matOut = int(exteriorPassedDMat.y);
+            if (matOut == MATNULL) {
+                // Reflect sky
+                mixCol += bgCloudRender * reflectedVal;
+            } else if (matOut == MATROCK) {
+                mixCol += baseRockCol * reflectedVal;
+            }
+            
+            // Specular (take angle diff between rayDir and reflect)
+            float specStrength = 0.05;
+            vec3 lightReflectRayDir = reflect(keyLightPos - posEnter, normal);
+            float spec = pow(max(dot(rayDir, lightReflectRayDir), 0.0), 4.0);
+            vec3 specularCol = specStrength * spec * vec3(1);
+            mixCol += specularCol * length(disIn);
+        } else if (mat == MATROCK) {
+            mixCol *= baseRockCol;
+            
+            // Colour based on steepness and viewing angle
+            vec3 localUpDir = vec3(0, -1, 0);
+            float steepness = -dot(normal, localUpDir);
+            float calcHeight = camHeight - WATERHEIGHT;
+            // Add variation on cliff sides and flooring
+            mixCol = mix(mixCol, lightRockCol, smoothstep(0.25, -0.15, steepness));
+            if (pos.y < calcHeight - 1.76 && steepness > 0.8) {
+                mixCol = mix(mixCol, lightRockCol, smoothstep(0.8, 1.25, steepness));
+            }
+            mixCol = mix(mixCol, darkRockCol, smoothstep(0.9, 1.3, steepness));
+            // Add 'shelves' of coloured layered rock
+            float shelf1 = 0.1 * (hash1(pos.x * 0.25) * 0.5 + 0.5);
+            float shelf2 = 0.08 * (hash1(pos.x * 0.5) * 0.5 + 0.5);
+            float shelf3 = 0.12 * (hash1(pos.x * 0.1) * 0.5 + 0.5);
+            if (pos.y > calcHeight - 1.65 && pos.y < calcHeight - 1.5 + shelf3) {
+                mixCol = mix(mixCol, lightRockCol, 0.3 - shelf3);
+            } else if (pos.y < calcHeight - 1.2 + shelf2) {
+                mixCol = mix(mixCol, baseRockCol, 0.3 - shelf2);
+            } else if (pos.y < calcHeight - 0.9 + shelf1) {
+                mixCol = mix(mixCol, darkRockCol, 0.3 - shelf1);
+            } else if (pos.y < calcHeight - 0.75) {
+                mixCol = mix(mixCol, lightRockCol, 0.3);
+            }
+            
+            //if (pos.y < calcHeight - 1.76 && steepness > 0.8) { mixCol = vec3(0,1,0); }
+        }
+        
+        // Lighting
+        mixCol += finalKey * keyLightCol;
+        mixCol += finalFill * fillLightCol;
+        
+        col = vec3(mixCol);
+        
+        // Fog
+        float fogStart = 0.0;
+        float fogEnd = MAXDIS;
+        col = mix(col, drawFog(rayDir) + 0.1 * bgCloudRender, smoothstep(fogStart, fogEnd, dis));
+    } else {
+        // Render sky & clouds
+        col = background(rayDir);
+        float fogStart = 0.0;
+        float fogEnd = MAXDIS;
+        col = mix(col, renderClouds(10.0 * (rayDir * 0.5 + 0.5), col), smoothstep(fogEnd-0.01, fogEnd, dis));
+    }   
+    
+    
+    // Output to screen
+    fragColor = vec4(col,1.0);
+}
