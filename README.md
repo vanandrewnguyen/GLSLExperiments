@@ -1,4 +1,4 @@
-# glsl_experiments
+# GLSLExperiments
 I am learning how to write shaders, these are my different attempts to learn them! 🎨🖌️
 
 Breakdown
