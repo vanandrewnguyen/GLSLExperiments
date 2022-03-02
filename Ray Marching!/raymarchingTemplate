@@ -5,6 +5,8 @@ Van Andrew Nguyen
 
 I wanted to revise my ray marching template code so I save time implementing new things. This latest version features soft / hard shadows and ambient occlusion. 
 For both of them I march and sample the SDF to get a value to apply to the shadows. IQ has an excellent article regarding shadows: https://www.iquilezles.org/www/articles/rmshadows/rmshadows.htm
+
+Edit 2: Added spot lights and point lights. 
 */
 
 // Globals //////////////////////////////////////////////////////////////////////
