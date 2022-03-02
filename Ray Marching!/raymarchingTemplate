@@ -221,8 +221,9 @@ void getHardShadow(vec3 pos, vec3 normal, vec3 lightDir, vec3 lightPos, inout fl
 }
 
 
-// Lighting function
-float getLight(vec3 pos, vec3 lightOrigin) {
+// Lighting //////////////////////////////////////////////////////////////////////
+
+float getPointLight(vec3 pos, vec3 lightOrigin) {
     // Get the light origin
     vec3 lightPos = lightOrigin; // basically a point in 3D space
     //lightPos.xz += vec2(sin(iTime), cos(iTime)) * 4.0;
@@ -241,6 +242,30 @@ float getLight(vec3 pos, vec3 lightOrigin) {
     // Hard shadows
     getHardShadow(pos, normal, lightDir, lightPos, dif);
     dif *= getSoftShadow(pos, normal, lightDir, 8.0);
+    
+    return dif;
+}
+
+float getSpotLight(vec3 pos, vec3 lightOrigin, vec3 endLightDir, float angleMax, float lightDropOff) {
+    // Identical to a point light, however, we restrict the light through a certain degree (use dot prod)
+    
+    // Get the light origin
+    vec3 lightPos = lightOrigin;
+    
+    // Get angle dif
+    vec3 lightDirToIntersect = normalize(lightPos - pos);
+    vec3 lightDirToEnd = normalize(lightOrigin - endLightDir);
+    float angleDif = dot(lightDirToIntersect, lightDirToEnd);
+    
+    // Get normal
+    vec3 normal = getNormal(pos);
+    
+    float dif = clamp(dot(normal, lightDirToIntersect), 0.0, 1.0);
+    dif *= smoothstep(angleMax, angleMax + lightDropOff, angleDif);
+    
+    // Hard shadows
+    getHardShadow(pos, normal, lightDirToIntersect, lightPos, dif);
+    dif *= getSoftShadow(pos, normal, lightDirToIntersect, 8.0);
     
     return dif;
 }
@@ -266,6 +291,10 @@ float getAmbientOcclusion(vec3 pos, vec3 normal) {
     return aoSum / aoMaxSum;
 }
 
+float getLightIntensity(float dif, vec3 lightPos, vec3 pos, float maxLightLen) {
+    return dif * clamp(1.0 - (length(lightPos - pos) / maxLightLen), 0.0, 1.0);
+}
+
 // Main //////////////////////////////////////////////////////////////////////
 
 vec3 render(vec3 rayOrigin, vec3 rayDir) {
@@ -289,10 +318,10 @@ vec3 render(vec3 rayOrigin, vec3 rayDir) {
         vec3 normal = getNormal(pos);
         
         // Lock the lights based on their distance to scene
-        float keyDiffuseLight = getLight(pos, keyLightPos);
-        float fillDiffuseLight = getLight(pos, fillLightPos);
-        float finalFill = fillDiffuseLight * clamp(1.0 - (length(fillLightPos - pos) / lightMaxLen), 0.0, 1.0);
-        float finalKey = keyDiffuseLight * clamp(1.0 - (length(keyLightPos - pos) / lightMaxLen), 0.0, 1.0);
+        float keyDiffuseLight = getPointLight(pos, keyLightPos);
+        float fillDiffuseLight = getSpotLight(pos, fillLightPos, vec3(0), PI / 3.5, 0.05); //getPointLight(pos, fillLightPos);
+        float finalFill = getLightIntensity(fillDiffuseLight, fillLightPos, pos, lightMaxLen * 1.5);
+        float finalKey = getLightIntensity(keyDiffuseLight, keyLightPos, pos, lightMaxLen * 0.7);
 
         // Materials
         if (mat == MATNULL) {
