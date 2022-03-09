@@ -8,12 +8,11 @@ During university break I decided to learn the basics of GLSL using Shadertoy. I
 
 My shaders feature rendering techniques of:
 - Cellular Automata
-- Raymarching SDF's
-- Materials, i.e. reflections, refractions, absorption
-- Noise generation
-- FBM
+- Raymarching and SDF's
+- PBR Materials, i.e. reflections, refractions, absorption
+- Noise generation and FBM
 - Terrain generation
-- Phong Lighting
+- Lighting Models
 
 In combining these techniques I can procedurally model shapes using SDF's and manipulate them in simple ways using said shapes and noise. I've written shaders using these methods which construct mountains, seaside scapes, etc.
 
