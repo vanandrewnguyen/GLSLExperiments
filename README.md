@@ -23,7 +23,7 @@ Otherwise, enjoy these select few outputs below :)
 
 ## Screenshots
 
-![PATH TRACING WHEEE 2](https://user-images.githubusercontent.com/53636492/164870221-0665b59c-0805-465f-81df-d70723417911.PNG)
+![path tracing 3](https://user-images.githubusercontent.com/53636492/164954377-54100945-a9f1-41ff-b348-281106d45f1a.PNG)
 Path tracer
 
 ![himalayas3](https://user-images.githubusercontent.com/53636492/147462495-edb3c259-0360-45ca-b679-c38f246645ee.PNG)
