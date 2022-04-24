@@ -73,6 +73,8 @@ float FresnelReflectAmount(float n1, float n2, vec3 normal, vec3 incident, float
 #define MAXDIS 100.0
 #define MAXBOUNCES 8
 
+#define RENDERPERFRAME 8
+
 #define PI 3.1416
 #define FOV 90.0
 
@@ -81,24 +83,43 @@ float FresnelReflectAmount(float n1, float n2, vec3 normal, vec3 incident, float
 struct materialData {
     // emissive = how much light is cast from this object
     // albedo = base colour of the object
-    // specInt = percentage of light reflected
-    // roughness = blurriness of reflection
-    // specCol = colour of the specular reflection, e.g. coloured metals
+    // chance = percentage of light reflected / refracted
+    // roughness = blurriness of reflection / refraction
+    // col = colour of the specular reflection, e.g. coloured metals, coloured glass
     // IOR = index of refraction
     vec3 emissive;
     vec3 albedo;
-    float specInt;
-    float roughness;
+    float specChance;
+    float specRoughness;
     vec3 specCol;
     float IOR;
+    float refractionChance;
+    float refractionRoughness;
+    vec3 refractionCol;
 };
 
 // Keeps data of the ray in a struct
 struct rayHitData {
     float dist;
     vec3 normal;
+    bool fromInside;
     materialData matData;
 };
+
+// Default material (like python fixture)
+materialData getDefaultMat() {
+    materialData mat;
+    mat.albedo = vec3(0.0);
+    mat.emissive = vec3(0.0);
+    mat.specChance = 0.0;
+    mat.specRoughness = 0.0;
+    mat.specCol = vec3(0.0);
+    mat.IOR = 1.0;
+    mat.refractionChance = 0.0;
+    mat.refractionRoughness = 0.0;
+    mat.refractionCol = vec3(0.0);
+    return mat;
+}
 
 // Randomises the seed used to bounce rays off surfaces
 uint wangHash(inout uint seed) {
@@ -195,7 +216,8 @@ bool testQuadTrace(in vec3 rayPos, in vec3 rayDir, inout rayHitData data, in vec
     
 	if (dist > SURFDIS && dist < data.dist) {
         data.dist = dist;        
-        data.normal = normal;        
+        data.normal = normal; 
+        data.fromInside = false;
         return true;
     }    
     
@@ -234,6 +256,7 @@ bool testSphereTrace(in vec3 rayPos, in vec3 rayDir, inout rayHitData data, in v
     }
     
 	if (dist > SURFDIS && dist < data.dist) {
+        data.fromInside = fromInside;
         data.dist = dist;        
         data.normal = normalize((rayPos+rayDir*dist) - sphere.xyz) * (fromInside ? -1.0f : 1.0f);
         return true;
@@ -242,6 +265,7 @@ bool testSphereTrace(in vec3 rayPos, in vec3 rayDir, inout rayHitData data, in v
     return false;
 }
 
+// Get scene 
 void scene(in vec3 rayPos, in vec3 rayDir, inout rayHitData hitInfo) {
     float wallLen = 10.0;
     float farPoint = 24.0;
@@ -255,6 +279,7 @@ void scene(in vec3 rayPos, in vec3 rayDir, inout rayHitData hitInfo) {
         vec3 D = vec3(wallLen,  wallLen, farPoint);
         if (testQuadTrace(rayPos, rayDir, hitInfo, A, B, C, D))
         {
+            hitInfo.matData = getDefaultMat();
             hitInfo.matData.albedo = vec3(0.1f, 0.7f, 0.1f);
             hitInfo.matData.emissive = vec3(0.0f, 0.0f, 0.0f);
         }
@@ -268,6 +293,7 @@ void scene(in vec3 rayPos, in vec3 rayDir, inout rayHitData hitInfo) {
         vec3 D = vec3(-wallLen,  wallLen, farPoint);
         if (testQuadTrace(rayPos, rayDir, hitInfo, A, B, C, D))
         {
+            hitInfo.matData = getDefaultMat();
             hitInfo.matData.albedo = vec3(0.7f, 0.1f, 0.1f);
             hitInfo.matData.emissive = vec3(0.0f, 0.0f, 0.0f);
         }
@@ -281,6 +307,7 @@ void scene(in vec3 rayPos, in vec3 rayDir, inout rayHitData hitInfo) {
         vec3 D = vec3(-wallLen, wallLen, nearPoint);
         if (testQuadTrace(rayPos, rayDir, hitInfo, A, B, C, D))
         {
+            hitInfo.matData = getDefaultMat();
             hitInfo.matData.albedo = vec3(0.7f, 0.7f, 0.7f);
             hitInfo.matData.emissive = vec3(0.0f, 0.0f, 0.0f);
         }
@@ -294,6 +321,7 @@ void scene(in vec3 rayPos, in vec3 rayDir, inout rayHitData hitInfo) {
         vec3 D = vec3(-wallLen, -wallLen, nearPoint);
         if (testQuadTrace(rayPos, rayDir, hitInfo, A, B, C, D))
         {
+            hitInfo.matData = getDefaultMat();
             hitInfo.matData.albedo = vec3(0.7f, 0.7f, 0.7f);
             hitInfo.matData.emissive = vec3(0.0f, 0.0f, 0.0f);
         }
@@ -307,6 +335,7 @@ void scene(in vec3 rayPos, in vec3 rayDir, inout rayHitData hitInfo) {
         vec3 D = vec3(-wallLen,  wallLen, farPoint);
         if (testQuadTrace(rayPos, rayDir, hitInfo, A, B, C, D))
         {
+            hitInfo.matData = getDefaultMat();
             hitInfo.matData.albedo = vec3(0.7f, 0.7f, 0.7f);
             hitInfo.matData.emissive = vec3(0.0f, 0.0f, 0.0f);
         }
@@ -321,35 +350,77 @@ void scene(in vec3 rayPos, in vec3 rayDir, inout rayHitData hitInfo) {
         vec3 D = vec3(-wallLen + pad*2.0, wallLen - 0.1, nearPoint + pad);
         if (testQuadTrace(rayPos, rayDir, hitInfo, A, B, C, D))
         {
+            hitInfo.matData = getDefaultMat();
             hitInfo.matData.albedo = vec3(0.7f, 0.7f, 0.7f);
             hitInfo.matData.emissive = vec3(1.0f, 0.9f, 0.7f) * 20.0;
         }
     } 
 
     // Balls
+    for (int i = 0; i < 5; i++) {
+        if (testSphereTrace(rayPos, rayDir, hitInfo, vec4(-6.0 + float(i*3), -7.5, 18.0, 1.5))) {
+            hitInfo.matData = getDefaultMat();
+            hitInfo.matData.albedo = vec3(1.0f, 0.8f, 0.7f);
+            hitInfo.matData.specChance = float(i) / 5.0;
+            hitInfo.matData.specRoughness = 0.0;
+            hitInfo.matData.specCol = hitInfo.matData.albedo;
+            hitInfo.matData.IOR = 1.33;
+        } 
+    }
+    
+    for (int i = 0; i < 5; i++) {
+        if (testSphereTrace(rayPos, rayDir, hitInfo, vec4(-6.0 + float(i*3), -7.5 + 4.0, 20.0, 1.5))) {
+            hitInfo.matData = getDefaultMat();
+            hitInfo.matData.albedo = vec3(0.8f, 1.0f, 0.6f);
+            hitInfo.matData.specChance = 0.9;
+            hitInfo.matData.specRoughness = 1.0 - float(i) / 5.0;
+            hitInfo.matData.specCol = hitInfo.matData.albedo;
+            hitInfo.matData.IOR = 1.33;
+        } 
+    }
+    
+    for (int i = 0; i < 5; i++) {
+        if (testSphereTrace(rayPos, rayDir, hitInfo, vec4(-6.0 + float(i*3), -7.5 + 4.0 + 4.0, 22.0, 1.5))) {
+            hitInfo.matData = getDefaultMat();
+            hitInfo.matData.albedo = vec3(0.8f, 0.7f, 1.0f);
+            hitInfo.matData.specChance = 0.1;
+            hitInfo.matData.specRoughness = 0.5;
+            hitInfo.matData.specCol = hitInfo.matData.albedo;
+            hitInfo.matData.IOR = 1.33;
+            hitInfo.matData.refractionChance = float(i) / 5.0;
+            hitInfo.matData.refractionRoughness = 1.0 - float(i) / 5.0;
+            hitInfo.matData.refractionCol = hitInfo.matData.albedo;
+            
+        } 
+    }
+    
+    /*
     if (testSphereTrace(rayPos, rayDir, hitInfo, vec4(-5.0f, -4.0f, 20.0f, 2.0f))) {
+        hitInfo.matData = getDefaultMat();
         hitInfo.matData.albedo = vec3(1.0f, 0.8f, 0.8f);
-        hitInfo.matData.emissive = vec3(0.0f, 0.0f, 0.0f);  
-        hitInfo.matData.specInt = 0.9;
-        hitInfo.matData.roughness = 0.0;
+        hitInfo.matData.specChance = 0.9;
+        hitInfo.matData.specRoughness = 0.0;
         hitInfo.matData.specCol = hitInfo.matData.albedo;
     } 
      
     if (testSphereTrace(rayPos, rayDir, hitInfo, vec4(0.0f, -6.0f, 20.0f, 2.0f))) {
+        hitInfo.matData = getDefaultMat();
         hitInfo.matData.albedo = vec3(0.8f, 1.0f, 0.8f);
-        hitInfo.matData.emissive = vec3(0.0f, 0.0f, 0.0f); 
-        hitInfo.matData.specInt = 0.5;
-        hitInfo.matData.roughness = 0.5;
+        hitInfo.matData.specChance = 0.5;
+        hitInfo.matData.specRoughness = 0.5;
         hitInfo.matData.specCol = hitInfo.matData.albedo;
     }    
      
     if (testSphereTrace(rayPos, rayDir, hitInfo, vec4(5.0f, -8.0f, 20.0f, 2.0f))) {
+        hitInfo.matData = getDefaultMat();
         hitInfo.matData.albedo = vec3(0.8f, 0.8f, 1.0f);
-        hitInfo.matData.emissive = vec3(0.0f, 0.0f, 0.0f);
-        hitInfo.matData.specInt = 0.0;
-        hitInfo.matData.roughness = 0.0;
-        hitInfo.matData.specCol = hitInfo.matData.albedo;
+        
+        hitInfo.matData.refractionChance = 1.0;
+        hitInfo.matData.refractionRoughness = 0.0;
+        hitInfo.matData.IOR = 1.33;
+        hitInfo.matData.refractionCol = vec3(0.1,0.2,0);
     }
+    */
      
     // Light
     {
@@ -359,6 +430,7 @@ void scene(in vec3 rayPos, in vec3 rayDir, inout rayHitData hitInfo) {
         vec3 D = vec3(-wallLen,  wallLen, nearPoint);
         if (testQuadTrace(rayPos, rayDir, hitInfo, A, B, C, D))
         {
+            hitInfo.matData = getDefaultMat();
             hitInfo.matData.albedo = vec3(0.7f, 0.7f, 0.7f);
             hitInfo.matData.emissive = vec3(1.0f, 0.9f, 0.7f) * 20.0;
         }
@@ -377,40 +449,104 @@ vec3 getRayColour(in vec3 startRayPos, in vec3 startRayDir, inout uint randomSee
     for (int bounceIndex = 0; bounceIndex <= MAXBOUNCES; ++bounceIndex) {
         // Shoot ray from the current pixel
         rayHitData hitInfo;
+        hitInfo.matData = getDefaultMat();
         hitInfo.dist = MAXDIS;
+        hitInfo.fromInside = false;
+        
+        // Now grab the scene info
         scene(rayPos, rayDir, hitInfo);
          
         // If the ray hits nothing, exit
         if (hitInfo.dist == MAXDIS) {
+            // We can also grab data from the cubemap
+            //col += SRGBToLinear(texture(iChannel1, rayDir).rgb * throughput);
             break;
         }
-         
-        // Update ray position and update its direction along the normal
-        rayPos = (rayPos + rayDir * hitInfo.dist) + hitInfo.normal * SURFDIS;
         
-        // We need to make a differentiation between rays that are for diff / spec lighting
-        float chanceSpec = hitInfo.matData.specInt;
-        if (chanceSpec > 0.0) {
-            chanceSpec = FresnelReflectAmount(1.0, hitInfo.matData.IOR, 
-                         rayDir, hitInfo.normal, hitInfo.matData.specInt, 1.0);
+        // If inside the object, add absorption (beer lambert, it's inverse exp)
+        if (hitInfo.fromInside) {
+            throughput *= exp(-hitInfo.matData.refractionCol * hitInfo.dist);
         }
-        float chooseSpec = (hash11(randomSeed) < chanceSpec) ? 1.0 : 0.0;
-        float chooseProbability = (chooseSpec == 1.0) ? chanceSpec : 1.0 - chanceSpec;
-        chooseProbability = max(chooseProbability, 0.001);
         
-        // Smooth spec uses the reflection ray
-        // Diff uses a random ray along the positive hemisphere
-        // Rough specular interpolates diff and spec
+        // Get chances for bounced ray
+        float specChance = hitInfo.matData.specChance;
+        float refractionChance = hitInfo.matData.refractionChance;
+        
+        // Apply fresnel
+        float rayProb = 1.0f;
+        if (specChance > 0.0) {
+            // Material actually has spec, get n1, n2 as index of air (1.0) and mat.IOR
+            specChance = FresnelReflectAmount(
+            hitInfo.fromInside ? hitInfo.matData.IOR : 1.0,
+            !hitInfo.fromInside ? 1.0 : hitInfo.matData.IOR,
+            rayDir, hitInfo.normal, hitInfo.matData.specChance, 1.0f);
+            
+            // Chance mult keeps diff / refraction ratio the same
+            float chanceMult = (1.0 - specChance) / (1.0 - hitInfo.matData.specChance);
+            refractionChance *= chanceMult;
+        }
+        
+        // Now we can choose whether we do a diff, spec, refractive ray
+        float doSpec = 0.0;
+        float doRefraction = 0.0;
+        float selectRay = hash11(randomSeed);
+        if (specChance > 0.0 && selectRay < specChance) {
+            doSpec = 1.0;
+            rayProb = specChance;
+        } else if (refractionChance > 0.0 && selectRay < specChance + refractionChance) {
+            doRefraction = 1.0;
+            rayProb = refractionChance;
+        } else {
+            rayProb = 1.0 - (specChance + refractionChance);
+        }
+        
+        // Don't let rayProb be 0.0 since we'll divide by it later
+        rayProb = max(rayProb, 0.001);
+        
+        // Update ray pos (notice how we push away from surface on EITHER side)
+        if (doRefraction == 1.0) {
+            rayPos = (rayPos + rayDir * hitInfo.dist) - hitInfo.normal * SURFDIS;
+        } else {
+            rayPos = (rayPos + rayDir * hitInfo.dist) + hitInfo.normal * SURFDIS;
+        }
+        
+        // Now we need a new ray direction
+        // Diff uses normal pointing hemisphere to shoot new ray
+        // Spec just reflects the incident ray
+        // Rough surfaces lerps diff and spec ray (so is more random)
         vec3 diffRayDir = normalize(hitInfo.normal + generateRandomUnitVector(randomSeed));
-        vec3 specRayDir = reflect(rayDir, hitInfo.normal);
-        float roughness = hitInfo.matData.roughness * hitInfo.matData.roughness;
-        specRayDir = normalize(mix(specRayDir, diffRayDir, roughness)); //squaring roughness to make it seem more linear
-        rayDir = mix(diffRayDir, specRayDir, chooseSpec); //normalize(hitInfo.normal + generateRandomUnitVector(randomSeed));        
          
-        // Add in emissive colour of the hit, then update the bounced colour
+        // Notice how we mix the rays depending on the roughness of the material
+        vec3 specRayDir = reflect(rayDir, hitInfo.normal);
+        float specRoughness = hitInfo.matData.specRoughness * hitInfo.matData.specRoughness;
+        specRayDir = normalize(mix(specRayDir, diffRayDir, specRoughness));
+
+        vec3 refractionRayDir = refract(rayDir, hitInfo.normal, hitInfo.fromInside ? hitInfo.matData.IOR : 1.0f / hitInfo.matData.IOR);
+        float refractionRoughness = hitInfo.matData.refractionRoughness * hitInfo.matData.refractionRoughness;
+        refractionRayDir = normalize(mix(refractionRayDir, normalize(-hitInfo.normal + generateRandomUnitVector(randomSeed)), refractionRoughness));
+
+        rayDir = mix(diffRayDir, specRayDir, doSpec);
+        rayDir = mix(rayDir, refractionRayDir, doRefraction);
+        
+        // Add in lighting from sources
         col += hitInfo.matData.emissive * throughput;
-        throughput *= hitInfo.matData.albedo;    
-        throughput /= chooseProbability;
+        
+        // Update col mult
+        if (doRefraction == 0.0) {
+            throughput *= mix(hitInfo.matData.albedo, hitInfo.matData.specCol, doSpec);
+        }
+        // Divide throughput because we only choose 1/3 rays to shoot (think of FBM)
+        throughput /= rayProb;
+        
+        // Apparently it's called Russian Roulette
+        // As throughput approaches 0, the ray is more likely to be terminated early
+        // Hence straggling rays are amplified
+        float p = max(throughput.r, max(throughput.g, throughput.b)); // max of any channel
+        if (hash11(randomSeed) > p) {
+            break;
+        }
+        // Add the energy we 'lose' by randomly terminating paths
+        throughput *= 1.0f / p;            
     }
 
     return col;
@@ -436,9 +572,12 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
     vec3 rayDir = normalize(rayTarget - rayPos);
     
     // We need to average the pixel values because we're sampling a bunch of rays that bounce randomly 
-    vec3 col = getRayColour(rayPos, rayDir, randomSeed);
-    vec3 prevCol = texture(iChannel0, uv).rgb;
-    col = mix(prevCol, col, 1.0 / float(iFrame + 1));
+    vec3 col = vec3(0);
+    if (iFrame > 2) {
+        col = getRayColour(rayPos, rayDir, randomSeed);
+        vec3 prevCol = texture(iChannel0, uv).rgb;
+        col = mix(prevCol, col, 1.0 / float(iFrame + 1));
+    }
     
     fragColor = vec4(col, 1.0f);
 }
