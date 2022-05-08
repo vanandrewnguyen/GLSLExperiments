@@ -153,7 +153,7 @@ float scalarTriple(vec3 u, vec3 v, vec3 w) {
 }
 
 // For indepth analysis on the ray-sphere intersections check out: https://www.youtube.com/watch?v=8fWZM8hCX5E
-// Intersection funct for sphere
+// Intersection funct for quad
 bool testQuadTrace(in vec3 rayPos, in vec3 rayDir, inout rayHitData data, in vec3 a, in vec3 b, in vec3 c, in vec3 d) {
     // calculate normal and flip vertices order if needed
     vec3 normal = normalize(cross(c-a, c-b));
@@ -224,7 +224,31 @@ bool testQuadTrace(in vec3 rayPos, in vec3 rayDir, inout rayHitData data, in vec
     return false;
 }
 
-// Intersection funct for quad
+// Intersection funct for box
+bool testBoxTrace(in vec3 rayPos, in vec3 rayDir, inout rayHitData data, in vec3 verts[8]) {
+    // Technically could call testQuadTrace() for 6 faces, but that's slow
+    /*
+    0 1 2 3 = bottom vert in ccw
+    4 5 6 7 = top vert in ccw
+            7--------6
+	       /|       /|
+	      4--------5 |
+	      | |      | |
+	      | 3------|-2
+	      |/       |/
+	      0--------1    
+    */
+    if (testQuadTrace(rayPos, rayDir, data, verts[0], verts[1], verts[5], verts[4])) { data.normal *= -1.0f; return true; }
+    if (testQuadTrace(rayPos, rayDir, data, verts[1], verts[2], verts[6], verts[5])) { data.normal *= -1.0f; return true; }
+    if (testQuadTrace(rayPos, rayDir, data, verts[0], verts[3], verts[7], verts[4])) { data.normal *= -1.0f; return true; }
+    if (testQuadTrace(rayPos, rayDir, data, verts[3], verts[2], verts[6], verts[7])) { data.normal *= -1.0f; return true; }
+    if (testQuadTrace(rayPos, rayDir, data, verts[4], verts[5], verts[6], verts[7])) { data.normal *= -1.0f; return true; }
+    if (testQuadTrace(rayPos, rayDir, data, verts[0], verts[1], verts[2], verts[3])) { data.normal *= -1.0f; return true; }
+
+    return false;
+}
+
+// Intersection funct for sphere
 bool testSphereTrace(in vec3 rayPos, in vec3 rayDir, inout rayHitData data, in vec4 sphere) {
 	//get the vector from the center of this sphere to where the ray begins.
 	vec3 m = rayPos - sphere.xyz;
@@ -277,11 +301,9 @@ void scene(in vec3 rayPos, in vec3 rayDir, inout rayHitData hitInfo) {
         vec3 B = vec3(wallLen, -wallLen, nearPoint);
         vec3 C = vec3(wallLen,  wallLen, nearPoint);
         vec3 D = vec3(wallLen,  wallLen, farPoint);
-        if (testQuadTrace(rayPos, rayDir, hitInfo, A, B, C, D))
-        {
+        if (testQuadTrace(rayPos, rayDir, hitInfo, A, B, C, D)) {
             hitInfo.matData = getDefaultMat();
             hitInfo.matData.albedo = vec3(0.1f, 0.7f, 0.1f);
-            hitInfo.matData.emissive = vec3(0.0f, 0.0f, 0.0f);
         }
     } 
     
@@ -291,11 +313,9 @@ void scene(in vec3 rayPos, in vec3 rayDir, inout rayHitData hitInfo) {
         vec3 B = vec3(-wallLen, -wallLen, nearPoint);
         vec3 C = vec3(-wallLen,  wallLen, nearPoint);
         vec3 D = vec3(-wallLen,  wallLen, farPoint);
-        if (testQuadTrace(rayPos, rayDir, hitInfo, A, B, C, D))
-        {
+        if (testQuadTrace(rayPos, rayDir, hitInfo, A, B, C, D)) {
             hitInfo.matData = getDefaultMat();
             hitInfo.matData.albedo = vec3(0.7f, 0.1f, 0.1f);
-            hitInfo.matData.emissive = vec3(0.0f, 0.0f, 0.0f);
         }
     } 
     
@@ -305,11 +325,9 @@ void scene(in vec3 rayPos, in vec3 rayDir, inout rayHitData hitInfo) {
         vec3 B = vec3( wallLen, wallLen, farPoint);
         vec3 C = vec3( wallLen, wallLen, nearPoint);
         vec3 D = vec3(-wallLen, wallLen, nearPoint);
-        if (testQuadTrace(rayPos, rayDir, hitInfo, A, B, C, D))
-        {
+        if (testQuadTrace(rayPos, rayDir, hitInfo, A, B, C, D)) {
             hitInfo.matData = getDefaultMat();
             hitInfo.matData.albedo = vec3(0.7f, 0.7f, 0.7f);
-            hitInfo.matData.emissive = vec3(0.0f, 0.0f, 0.0f);
         }
     } 
     
@@ -319,11 +337,9 @@ void scene(in vec3 rayPos, in vec3 rayDir, inout rayHitData hitInfo) {
         vec3 B = vec3( wallLen, -wallLen, farPoint);
         vec3 C = vec3( wallLen, -wallLen, nearPoint);
         vec3 D = vec3(-wallLen, -wallLen, nearPoint);
-        if (testQuadTrace(rayPos, rayDir, hitInfo, A, B, C, D))
-        {
+        if (testQuadTrace(rayPos, rayDir, hitInfo, A, B, C, D)) {
             hitInfo.matData = getDefaultMat();
             hitInfo.matData.albedo = vec3(0.7f, 0.7f, 0.7f);
-            hitInfo.matData.emissive = vec3(0.0f, 0.0f, 0.0f);
         }
     } 
     
@@ -333,11 +349,9 @@ void scene(in vec3 rayPos, in vec3 rayDir, inout rayHitData hitInfo) {
         vec3 B = vec3( wallLen, -wallLen, farPoint);
         vec3 C = vec3( wallLen,  wallLen, farPoint);
         vec3 D = vec3(-wallLen,  wallLen, farPoint);
-        if (testQuadTrace(rayPos, rayDir, hitInfo, A, B, C, D))
-        {
+        if (testQuadTrace(rayPos, rayDir, hitInfo, A, B, C, D)) {
             hitInfo.matData = getDefaultMat();
             hitInfo.matData.albedo = vec3(0.7f, 0.7f, 0.7f);
-            hitInfo.matData.emissive = vec3(0.0f, 0.0f, 0.0f);
         }
     } 
     
@@ -348,14 +362,14 @@ void scene(in vec3 rayPos, in vec3 rayDir, inout rayHitData hitInfo) {
         vec3 B = vec3( wallLen - pad*2.0, wallLen - 0.1, farPoint - pad);
         vec3 C = vec3( wallLen - pad*2.0, wallLen - 0.1, nearPoint + pad);
         vec3 D = vec3(-wallLen + pad*2.0, wallLen - 0.1, nearPoint + pad);
-        if (testQuadTrace(rayPos, rayDir, hitInfo, A, B, C, D))
-        {
+        if (testQuadTrace(rayPos, rayDir, hitInfo, A, B, C, D)) {
             hitInfo.matData = getDefaultMat();
             hitInfo.matData.albedo = vec3(0.7f, 0.7f, 0.7f);
             hitInfo.matData.emissive = vec3(1.0f, 0.9f, 0.7f) * 20.0;
         }
     } 
-
+    
+    /*
     // Balls
     for (int i = 0; i < 5; i++) {
         if (testSphereTrace(rayPos, rayDir, hitInfo, vec4(-6.0 + float(i*3), -7.5, 18.0, 1.5))) {
@@ -393,6 +407,68 @@ void scene(in vec3 rayPos, in vec3 rayDir, inout rayHitData hitInfo) {
             
         } 
     }
+    */
+    
+    // Box
+    {
+        /*
+            7--------6
+	       /|       /|
+	      4--------5 |
+	      | |      | |
+	      | 3------|-2
+	      |/       |/
+	      0--------1
+        */
+        float boxT = -2.0;
+        float boxB = -10.0;
+        float boxL = -6.0;
+        float boxR = -2.0;
+        float boxFar = 23.5;
+        float boxClose = 19.0;
+        
+        vec3 verts[8];
+        verts[0] = vec3(boxL, boxB, boxClose);
+        verts[1] = vec3(boxR, boxB, boxClose);
+        verts[2] = vec3(boxR, boxB, boxFar);
+        verts[3] = vec3(boxL, boxB, boxFar);
+        verts[4] = vec3(boxL, boxT, boxClose);
+        verts[5] = vec3(boxR, boxT, boxClose);
+        verts[6] = vec3(boxR, boxT, boxFar);
+        verts[7] = vec3(boxL, boxT, boxFar);
+        if (testBoxTrace(rayPos, rayDir, hitInfo, verts)) {
+            hitInfo.matData = getDefaultMat();
+            hitInfo.matData.albedo = vec3(0.7);
+        }
+    }
+    
+    if (testSphereTrace(rayPos, rayDir, hitInfo, vec4(-8.0f, -8.5f, 19.0f, 1.5f))) {
+        hitInfo.matData = getDefaultMat();
+        hitInfo.matData.albedo = vec3(1.0f, 0.8f, 0.8f);
+        hitInfo.matData.specChance = 0.9;
+        hitInfo.matData.specRoughness = 0.0;
+        hitInfo.matData.specCol = hitInfo.matData.albedo;
+    } 
+    
+    if (testSphereTrace(rayPos, rayDir, hitInfo, vec4(0.4f, -8.2f, 21.0f, 1.8f))) {
+        hitInfo.matData = getDefaultMat();
+        hitInfo.matData.albedo = vec3(0.9, 0.6, 0.7);
+        hitInfo.matData.specChance = 0.5;
+        hitInfo.matData.specRoughness = 0.5;
+        hitInfo.matData.specCol = hitInfo.matData.albedo;
+    }
+    
+    if (testSphereTrace(rayPos, rayDir, hitInfo, vec4(5.0f, -8.0f, 20.0f, 2.0f))) {
+        hitInfo.matData = getDefaultMat();
+        hitInfo.matData.albedo = vec3(0.8f, 0.8f, 1.0f);
+        hitInfo.matData.specChance = 0.2;
+        hitInfo.matData.specRoughness = 0.3;
+        hitInfo.matData.specCol = hitInfo.matData.albedo;
+        hitInfo.matData.refractionChance = 1.0;
+        hitInfo.matData.refractionRoughness = 0.0;
+        hitInfo.matData.IOR = 1.33;
+        hitInfo.matData.refractionCol = vec3(0.1,0.2,0);
+    }
     
     /*
     if (testSphereTrace(rayPos, rayDir, hitInfo, vec4(-5.0f, -4.0f, 20.0f, 2.0f))) {
@@ -414,27 +490,16 @@ void scene(in vec3 rayPos, in vec3 rayDir, inout rayHitData hitInfo) {
     if (testSphereTrace(rayPos, rayDir, hitInfo, vec4(5.0f, -8.0f, 20.0f, 2.0f))) {
         hitInfo.matData = getDefaultMat();
         hitInfo.matData.albedo = vec3(0.8f, 0.8f, 1.0f);
-        
+        hitInfo.matData.specChance = 0.5;
+        hitInfo.matData.specRoughness = 0.3;
+        hitInfo.matData.specCol = hitInfo.matData.albedo;
         hitInfo.matData.refractionChance = 1.0;
         hitInfo.matData.refractionRoughness = 0.0;
         hitInfo.matData.IOR = 1.33;
         hitInfo.matData.refractionCol = vec3(0.1,0.2,0);
     }
     */
-     
-    // Light
-    {
-        vec3 A = vec3(-wallLen,  wallLen, farPoint);
-        vec3 B = vec3( wallLen,  wallLen, farPoint);
-        vec3 C = vec3( wallLen,  wallLen, nearPoint);
-        vec3 D = vec3(-wallLen,  wallLen, nearPoint);
-        if (testQuadTrace(rayPos, rayDir, hitInfo, A, B, C, D))
-        {
-            hitInfo.matData = getDefaultMat();
-            hitInfo.matData.albedo = vec3(0.7f, 0.7f, 0.7f);
-            hitInfo.matData.emissive = vec3(1.0f, 0.9f, 0.7f) * 20.0;
-        }
-    }    
+      
 }
 
 // Equivalent to scene() in template
