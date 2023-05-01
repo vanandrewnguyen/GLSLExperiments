@@ -26,6 +26,12 @@ Otherwise, enjoy these select few outputs below :)
 ![path tracing 3](https://user-images.githubusercontent.com/53636492/164954377-54100945-a9f1-41ff-b348-281106d45f1a.PNG)
 Path tracer
 
+![mountainsFog](https://user-images.githubusercontent.com/53636492/235445701-f178d19d-fbab-46e3-8c45-6a55d1c616fa.PNG)
+Mountain Terrain
+
+![sandDune](https://user-images.githubusercontent.com/53636492/235445721-1659bb26-4ed2-42b3-a49c-7743a234da87.PNG)
+Sand Dunes
+
 ![himalayas3](https://user-images.githubusercontent.com/53636492/147462495-edb3c259-0360-45ca-b679-c38f246645ee.PNG)
 Himalayas Shader
 
