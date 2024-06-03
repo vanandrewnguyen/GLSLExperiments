@@ -1,15 +1,17 @@
-// Globals //////////////////////////////////////////////////////////////////////
-
+// Van-Andrew Nguyen
 /*
-Max steps is the maximum amount of steps we can make to get a ray length
-Max distance is the maximum distance we can shoot a ray
-Surf distance is the distance we loop to get to register a hit on the surface
+03/06/24
+Gyroid Water Demo
+
+Demo to show SSS in a water material.
 */
+
+////////////// Buffer A /////////////////
+// Globals //////////////////////////////////////////////////////////////////////
 #define MAXSTEPS 100
 #define MAXDIS 24.0
 #define SURFDIS 0.01
 
-#define TIMEMULT 0.5
 #define PI 3.1416
 
 #define MATNULL 0
@@ -17,23 +19,27 @@ Surf distance is the distance we loop to get to register a hit on the surface
 
 // Define global settings
 const float AMBIENT = 0.2;
+const float TIME_MULT = 0.5;
 
 // Define global colours
-const vec3 SKY_TOP_COL = vec3(0.77,0.56,0.93);
-const vec3 SKY_BOTTOM_COL = vec3(0.96,0.62,0.26);
+const vec3 SKY_TOP_COL = vec3(0.941, 0.729, 0.6);
+const vec3 SKY_BOTTOM_COL = vec3(0.827, 0.458, 0.211);
 
-const vec3 SUN_RAY_COL = vec3(0.980, 0.633, 0.480);
-const vec3 SUN_COL = vec3(1.0, 0.6, 0.3) * 3.0;
-
-const vec3 SKY_COL = vec3(0.941, 0.729, 0.6);
+const vec3 CAUSTIC_COL = vec3(0.941, 0.729, 0.6);
 const vec3 WATER_COL = vec3(0.313, 0.949, 0.847);
 
-const vec3 KEY_LIGHT_COL = vec3(1,0,0); // vec3(0.937, 0.376, 0.101);
-const vec3 KEY2_LIGHT_COL = vec3(0,0,1); // vec3(0.854, 0.364, 0.501);
 
-// Define global positions
-const vec3 KEY_LIGHT_POS = vec3(3, 4, 2);
-const vec3 KEY2_LIGHT_POS = vec3(-3, 0.5, -3);
+// Define lighting
+const int NUM_LIGHTS = 2;
+const vec3 KEY_LIGHT_POS[] = vec3[](
+    vec3(3, 4, 2),
+    vec3(-3, 0.5, -3)
+);
+
+const vec3 KEY_LIGHT_COL[] = vec3[](
+    vec3(1, 0, 0),
+    vec3(0, 0, 1)
+);
 
 // Noise /////////////////////////////////////////////////////////////////////
 
@@ -137,7 +143,7 @@ vec3 gerstnerWave(vec2 coord, float wavelength, float steepness, vec2 direction)
     float c = sqrt(gravitationalConst / k);
     float a = steepness / k;
     vec2 dir = normalize(direction);
-    float f = k * (dot(dir, coord.xy) - c * iTime * (1.0 / TIMEMULT));
+    float f = k * (dot(dir, coord.xy) - c * iTime * (1.0 / TIME_MULT));
     
     gerstner.x += dir.x * (a * cos(f));
     gerstner.y = a * sin(f);
@@ -191,17 +197,16 @@ vec2 getDist(vec3 pos, bool includeWater) {
     float gyroid3Dis = sdGyroid(pos, 8.65, 0.02, 0.6, 1.1, 1.5);
     float gyroidDis;
     gyroidDis = opIntersection(gyroid1Dis, cubeDis) - gyroid2Dis * 0.1 - gyroid3Dis * 0.05; // bump map + = rocky, - = smooth bubbles
-    // gyroidDis = opIntersection(gyroidDis, cubeDis);
     
     // Final distance
-    float finalDis = sphereSmallDis; // dummy 
+    float finalDis = dummy; // sphereSmallDis;
     if (includeWater) {
-        finalDis = opUnion(sphereDis, sphereSmallDis); // gyroidDis; //opUnion(sphereDis, floorDis);
+        finalDis = gyroidDis; //opUnion(sphereDis, floorDis); // opUnion(sphereDis, sphereSmallDis);
     }
     
     // Final material to return
     int mat = MATNULL;
-    if (finalDis == sphereDis) {
+    if (finalDis == gyroidDis) {
         mat = MATWATER;
     }
     
@@ -360,7 +365,23 @@ vec3 getMatCol(int mat) {
 }
 
 vec3 background(vec3 rayDir) {
+    // Texture of cube map
     return texture(iChannel0, rayDir).rgb;
+    
+    // Gradient background
+    vec3 col = vec3(0);
+    float y = rayDir.y * 0.4 + 0.6;
+    col += (1.0 - y) * vec3(1) * WATER_COL;
+    
+    // Rays
+    float a = atan(rayDir.x, rayDir.z);
+    float rays = sin(a * 10.0 + iTime * TIME_MULT) * sin(a * 7.0 - iTime * TIME_MULT) * sin(a * 6.0);
+    rays *= smoothstep(0.5, 0.3, y);
+    col += rays;
+    col = max(col, 0.0);
+    col += smoothstep(0.5, 0.0, y);
+    
+    return col;
 }
 
 // https://blog.demofox.org/2017/01/09/raytracing-reflection-refraction-fresnel-total-internal-reflection-and-beers-law/
@@ -420,8 +441,8 @@ vec3 renderVolume(vec3 entryPos, vec3 rayDir, float IOR) {
     float volumeDepth = 0.0;
     int volumeMaxSteps = 50;
     int shadowMaxSteps = 20;
-    float absorptionCoefficient = 400.0;
-    vec3 volumeCol = WATER_COL; // vec3(0.0);
+    float absorptionCoefficient = 0.5;
+    vec3 volumeCol = vec3(0.0);
     
     for (int i = 0; i < volumeMaxSteps; i++) {
         volumeDepth += marchSize;
@@ -432,19 +453,14 @@ vec3 renderVolume(vec3 entryPos, vec3 rayDir, float IOR) {
         opaqueVis *= beerLambertAttenuation(absorptionCoefficient, marchSize);
         float currAbsorption = prevOpaqueVis - opaqueVis;
         
-        // Compare with diffuse lights (oh boy)
-        vec3 keyLightDir = KEY_LIGHT_POS - insidePos;
-        float keyLightDis = length(keyLightDir);
-        float keyLightVis = getLightVis(insidePos, keyLightDir, keyLightDis, shadowMaxSteps, shadowMarchSize, absorptionCoefficient);
-        vec3 outKeyLightCol = keyLightVis * KEY_LIGHT_COL * getLightAttenuation(keyLightDis);
-        volumeCol += currAbsorption * WATER_COL * outKeyLightCol;
-        
-        // Compare with diffuse lights (oh boy)
-        vec3 fillLightDir = KEY2_LIGHT_POS - insidePos;
-        float fillLightDis = length(fillLightDir);
-        float fillLightVis = getLightVis(insidePos, fillLightDir, fillLightDis, shadowMaxSteps, shadowMarchSize, absorptionCoefficient);
-        vec3 outfillLightCol = fillLightVis * KEY2_LIGHT_COL * getLightAttenuation(fillLightDis);
-        volumeCol += currAbsorption * WATER_COL * outfillLightCol;
+        // Compare with diffuse lights
+        for (int i = 0; i < NUM_LIGHTS; i++) {
+            vec3 lightDir = KEY_LIGHT_POS[i] - insidePos;
+            float lightDis = length(lightDir);
+            float lightVis = getLightVis(insidePos, lightDir, lightDis, shadowMaxSteps, shadowMarchSize, absorptionCoefficient);
+            vec3 outLightCol = lightVis * KEY_LIGHT_COL[i] * getLightAttenuation(lightDis);
+            volumeCol += currAbsorption * WATER_COL * outLightCol;
+        }
 
         // Ambient light
         volumeCol += currAbsorption * WATER_COL * AMBIENT;
@@ -460,7 +476,7 @@ vec3 renderVolume(vec3 entryPos, vec3 rayDir, float IOR) {
                 volumeCol = mix(volumeCol, intCol, 1.0-opaqueVis);
                 
                 // Then add caustics
-                vec3 causticCol = 0.1 * volumeDepth * getVoronoi(rayDir.yz * 20.0) * SKY_COL;
+                vec3 causticCol = 0.1 * volumeDepth * getVoronoi(rayDir.yz * 20.0) * CAUSTIC_COL;
                 volumeCol += causticCol;
                 
                 return volumeCol;
@@ -470,16 +486,34 @@ vec3 renderVolume(vec3 entryPos, vec3 rayDir, float IOR) {
     
     // If we've reached this stage, this means that we've exited the water 
     // and now need to merge the background col
+    // Also add colour dispersion
+    float abberation = 0.01;
+    
     vec3 posExit = entryPos + rayDir * volumeDepth;
     vec3 exitNormal = -getNormal(posExit, false);
-    vec3 rayDirOut = refract(rayDir, exitNormal, 1.33);
+    vec3 rayDirOut;
+    
+    vec3 backgroundCol = vec3(0.0);
+    rayDirOut = refract(rayDir, exitNormal, 1.33 - abberation);
     if (length(rayDirOut) == 0.0) {
-        rayDirOut = reflect(rayDir, exitNormal); // total internal reflection
+        rayDirOut = reflect(rayDir, exitNormal);
     }
-
-    float maxWidth = 0.8;
+    backgroundCol.r = background(rayDirOut).r;
+    rayDirOut = refract(rayDir, exitNormal, 1.33);
+    if (length(rayDirOut) == 0.0) {
+        rayDirOut = reflect(rayDir, exitNormal);
+    }
+    backgroundCol.g = background(rayDirOut).g;
+    rayDirOut = refract(rayDir, exitNormal, 1.33 + abberation);
+    if (length(rayDirOut) == 0.0) {
+        rayDirOut = reflect(rayDir, exitNormal);
+    }
+    backgroundCol.b = background(rayDirOut).b;
+    
+    // Merge colours
+    float maxWidth = 0.6;
     float stepper = clamp(volumeDepth / maxWidth, 0.0, 1.0);
-    return mix(volumeCol, background(rayDirOut), maxWidth);
+    return mix(volumeCol, backgroundCol, maxWidth);
 }
 
 vec3 render(vec3 rayOrigin, vec3 rayDir) {
@@ -508,11 +542,6 @@ vec3 render(vec3 rayOrigin, vec3 rayDir) {
             mixCol = renderVolume(posEnter, rayDirIn, IOR);
         }
         
-        // Lighting
-        // Lock the lights based on their distance to scene
-        float keyDiffuseLight = getPointLight(pos, KEY_LIGHT_POS, true);
-        float key2DiffuseLight = getPointLight(pos, KEY2_LIGHT_POS, true);
-        
         // Ambient Occlusion (check out Alex Evans)
         // Trick is to sample sdf along normal
         if (mat != MATWATER) {
@@ -520,31 +549,30 @@ vec3 render(vec3 rayOrigin, vec3 rayDir) {
             mixCol *= ao; // <- video pt 1 has tricks on cheaper AO
         }
         
+        // Lighting
         // Diffuse
         if (mat != MATWATER) {
-            mixCol += keyDiffuseLight * KEY_LIGHT_COL * 0.4;
-            mixCol += key2DiffuseLight * KEY2_LIGHT_COL * 0.3;
+            for (int i = 0; i < NUM_LIGHTS; i++) {
+                float keyDiffuse = getPointLight(pos, KEY_LIGHT_POS[i], true);
+                mixCol += keyDiffuse * KEY_LIGHT_COL[i] * 0.4;
+            }
         }
         
         // Specular
         float specStrength = 0.01;
-        vec3 lightReflectRayDir = reflect(KEY_LIGHT_POS - posEnter, normal);
-        float spec = pow(max(dot(rayDir, lightReflectRayDir), 0.0), 2.0);
-        float fresnel = clamp(dot(normal, (KEY_LIGHT_POS - posEnter)), 0.0, 1.0);
-        vec3 specularCol = specStrength * spec * KEY_LIGHT_COL * fresnel;
-        mixCol += specularCol;
-
-        lightReflectRayDir = reflect(KEY2_LIGHT_POS - posEnter, normal);
-        spec = pow(max(dot(rayDir, lightReflectRayDir), 0.0), 2.0);
-        fresnel = clamp(dot(normal, (KEY2_LIGHT_POS - posEnter)), 0.0, 1.0);
-        specularCol = specStrength * spec * KEY2_LIGHT_COL * fresnel;
-        mixCol += specularCol;
+        for (int i = 0; i < NUM_LIGHTS; i++) {
+            vec3 lightReflectRayDir = reflect(KEY_LIGHT_POS[i] - posEnter, normal);
+            float spec = pow(max(dot(rayDir, lightReflectRayDir), 0.0), 2.0);
+            float fresnel = clamp(dot(normal, (KEY_LIGHT_POS[i] - posEnter)), 0.0, 1.0);
+            vec3 specularCol = specStrength * spec * KEY_LIGHT_COL[i] * fresnel;
+            mixCol += specularCol;
+        }
         
         // Reflections
         if (mat == MATWATER) {
             vec3 reflectedRay = reflect(rayDir, normal);
             float fresnel = fresnelReflectAmount(1.0, IOR, normal, rayDir, 0.1); 
-            mixCol += texture(iChannel0, reflectedRay).rgb * fresnel;
+            mixCol += background(reflectedRay) * fresnel;
         }
         
         col = vec3(mixCol);
@@ -592,4 +620,21 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
     
     // Output to screen
     fragColor = vec4(col,1.0);
+}
+
+//////////////   Main   /////////////////
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 uv = fragCoord.xy / iResolution.xy;
+    vec3 col = texture(iChannel0, uv).rgb;
+    
+    // Vignette
+    float vig = uv.x * uv.y * (1.0 - uv.x) * (1.0 - uv.y);
+    float vigIntensity = 0.2;
+    vig = clamp(pow(16.0 * vig, vigIntensity), 0.0, 1.0);
+    col *= 0.5 * vig + 0.5;
+    
+    // Colour correction
+    col = pow(col, vec3(1.0/2.2));
+    
+    fragColor = vec4(col, 1.0);
 }
